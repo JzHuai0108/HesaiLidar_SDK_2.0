@@ -32,15 +32,13 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <iostream>
 
-struct Udp4_14_output_cuda {
+struct CudaPointXYZAER {
     float x;
     float y;
     float z;
     float azimuthCalib;
     float elevationCalib;
-    uint32_t flag1; //   25~32:intensity, 16~24:confidence, 8~15:peek, 0~7:ambient
-    uint32_t flag;
-    uint16_t width;
+    uint8_t reserved[8];
 };
 
 #endif  

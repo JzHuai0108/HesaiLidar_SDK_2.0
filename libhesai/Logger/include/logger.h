@@ -38,7 +38,19 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 #include <iostream>
 
-#define LOG_LIB_API
+#ifdef BUILD_LOG_LIB_SHARED
+#ifdef _MSC_VER
+  #ifdef LOG_LIB_API_EXPORTS
+    #define LOG_LIB_API __declspec(dllexport)
+  #else
+    #define LOG_LIB_API __declspec(dllimport)
+  #endif
+#else 
+  #define LOG_LIB_API
+#endif
+#else 
+  #define LOG_LIB_API
+#endif
 
 enum LOGLEVEL
 {
