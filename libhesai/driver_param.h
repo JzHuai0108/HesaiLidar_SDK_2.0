@@ -101,8 +101,6 @@ typedef struct InputParam
   // PTC mode
   PtcMode ptc_mode = PtcMode::tcp;
   SourceType source_type = DATA_FROM_PCAP;
-  bool use_someip = false;
-  std::string someip_matrix_path = "";
   // Ip of Lidar
   std::string device_ip_address = "";   
   // tcp port

@@ -37,8 +37,7 @@ set(WITH_LIDARBOARD ON CACHE BOOL "Build lidarboard code")
 set(WITH_UDPPARSER ON CACHE BOOL "Build udp parser code")
 set(WITH_SERIALCLIENT ON CACHE BOOL "Build serial client code")
 set(WITH_PTCCLIENT ON CACHE BOOL "Build ptcClient code")
-set(WITH_SOMEIPCLIENT ON CACHE BOOL "Build someip client code")
-if (WITH_LIDARBOARD AND WITH_UDPPARSER AND WITH_SERIALCLIENT AND WITH_PTCCLIENT AND WITH_SOMEIPCLIENT)
+if (WITH_LIDARBOARD AND WITH_UDPPARSER AND WITH_SERIALCLIENT AND WITH_PTCCLIENT)
     set(WITH_LIDARLIB ON CACHE BOOL "Build lidar code")
 endif()
 
@@ -146,19 +145,6 @@ endif()
     
 endif(WITH_PTCCLIENT)
 
-if(WITH_SOMEIPCLIENT)
-    add_library(someipClient_lib
-        SomeIPClient/src/someip_client.cc
-        )
-    target_link_libraries(someipClient_lib
-                        platutils_lib)
-    set_target_properties(ptcClient_lib 
-        PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 14)
-    target_include_directories(someipClient_lib PUBLIC   
-        SomeIPClient/include
-    )
-endif(WITH_SOMEIPCLIENT)
-
 if(WITH_LIDARBOARD)
     add_library(source_lib 
         Source/src/source.cc
@@ -229,7 +215,6 @@ if (WITH_LIDARLIB)
         ptcClient_lib
         source_lib
         serialClient_lib
-        someipClient_lib
         ${CMAKE_THREAD_LIBS_INIT})
     if(WITH_UDPPARSERGPU)
         target_link_libraries(lidar_lib

@@ -7,17 +7,15 @@
 ### Added
 1. Added function examples for backfilling point cloud data packets in EXTERNAL_INPUT_PARSER_TEST mode.
 2. Added support for JT128 parsing.
-3. Added tcp_source file for receiving TCP point cloud data streams.
-4. Added support for parsing PCAP files with different definitions.
-5. Added someip file for subscribing to and parsing SOME/IP-related data.
-6. Added a new serial upgrade function for JT16, named RequestUpgradeLargePackage.
-7. Added play_rate_ feature to control PCAP playback rate, with a default value of 1.0 representing 1x playback speed.
-8. Added channel_fov_filter_path feature to configure FOV files for filtering point cloud data with multiple FOVs under multiple channels.
-9. Added multi_fov_filter_ranges feature to configure FOV files for filtering point cloud data with multiple FOVs across all channels.
-10. Added frame_frequency feature to configure point cloud publishing frequency, requiring manual configuration of default_frame_frequency to the actual point cloud publishing frequency.
-11. Added host_ptc_port feature to configure the local port when connecting to PTC.
-12. Added update_function_safety_flag feature; when enabled, function safety parsing results can be obtained by accessing the funcSafety struct (supported by some mechanical LiDARs).
-13. Added echo_mode_filter feature to configure echo mode filtering, with a default value of 0 indicating no filtering.
+3. Added support for parsing PCAP files with different definitions.
+4. Added a new serial upgrade function for JT16, named RequestUpgradeLargePackage.
+5. Added play_rate_ feature to control PCAP playback rate, with a default value of 1.0 representing 1x playback speed.
+6. Added channel_fov_filter_path feature to configure FOV files for filtering point cloud data with multiple FOVs under multiple channels.
+7. Added multi_fov_filter_ranges feature to configure FOV files for filtering point cloud data with multiple FOVs across all channels.
+8. Added frame_frequency feature to configure point cloud publishing frequency, requiring manual configuration of default_frame_frequency to the actual point cloud publishing frequency.
+9. Added host_ptc_port feature to configure the local port when connecting to PTC.
+10. Added update_function_safety_flag feature; when enabled, function safety parsing results can be obtained by accessing the funcSafety struct (supported by some mechanical LiDARs).
+11. Added echo_mode_filter feature to configure echo mode filtering, with a default value of 0 indicating no filtering.
 
 ### Fix
 1. Modified the exported PCL struct definition in pcl_tool.cc to meet Windows compilation requirements.

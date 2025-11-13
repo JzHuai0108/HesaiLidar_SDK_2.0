@@ -112,27 +112,6 @@ int Lidar<T_Point>::Init(const DriverParam& param) {
     Logger::GetInstance().Start(); 
     /**********************************************************************************/
     /***************************Init source****************************************/
-    if (param.input_param.source_type == DATA_FROM_LIDAR && param.input_param.use_someip) {
-      someip_client_ = std::make_shared<SomeIPClient>(SOMEIP_SERVICE_PORT, "");
-      bool ret = someip_client_->GetSomeipMatrixConfig(param.input_param.someip_matrix_path);
-      if (ret == false) {
-        LogFatal("Error occurred while reading the someip matrix configuration, or the pointcloud configuration was not found.");
-        init_finish_[FailInit] = true;
-        return -1;
-      }
-      ret = someip_client_->SomeipSubscribePointCloudAndFaultMessageIpv4();
-      if (ret == false) {
-        LogFatal("send someip subscribe error");
-        init_finish_[FailInit] = true;
-        return -1;
-      }
-      if (someip_client_->GetSomeipCusType() == 0) {
-        someip_client_->GetCorrectionData();
-      } else {
-        someip_client_->GetACLData();
-      }
-      someip_client_->SetLidarStatus(MODE_ACTIVE);
-    }
     udp_port_ = param.input_param.udp_port;
     fault_message_port_ = param.input_param.fault_message_port;
     device_ip_address_ = param.input_param.device_ip_address;
@@ -148,25 +127,7 @@ int Lidar<T_Point>::Init(const DriverParam& param) {
       source_->SetPcapLoop(param.decoder_param.pcap_play_in_loop);
     }
     else if(param.input_param.source_type == DATA_FROM_LIDAR) {
-      if (param.input_param.use_someip) {
-        std::string host_ip = "", multicast_ip = "", lidar_ip = "";
-        uint32_t host_port = 0, multi_port = 0, lidar_port = 0;
-        someip_client_->GetIPPort(SD_POINT_CLOUD, lidar_ip, lidar_port, host_ip, host_port, multicast_ip, multi_port); 
-        if (someip_client_->IsMulticastSpec()) {
-          source_ = std::make_shared<SocketSource>(host_port, host_ip, multicast_ip);
-        } else {
-          source_ = std::make_shared<SocketSource>(host_port, host_ip, "");
-        }
-        std::string fm_host_ip = "", fm_multicast_ip = "", fm_lidar_ip = "";
-        uint32_t fm_host_port = 0, fm_multi_port = 0, fm_lidar_port = 0;
-        if (someip_client_->GetIPPort(SD_FAULT_MSG, fm_lidar_ip, fm_lidar_port, fm_host_ip, fm_host_port, fm_multicast_ip, fm_multi_port)) {
-          if (someip_client_->IsMulticastSpec() && fm_multi_port != multi_port) {
-            source_fault_message_ = std::make_shared<SocketSource>(fm_host_port, fm_multicast_ip);
-          } else if (someip_client_->IsMulticastSpec() == false && fm_host_port != host_port) {
-            source_fault_message_ = std::make_shared<SocketSource>(fm_host_port, fm_host_ip);
-          }
-        }
-      } else {
+      {
         source_ = std::make_shared<SocketSource>(param.input_param.udp_port, param.input_param.host_ip_address, param.input_param.multicast_ip_address);
         if (param.input_param.fault_message_port > 0 && param.input_param.fault_message_port != param.input_param.udp_port) {
           source_fault_message_ = std::make_shared<SocketSource>(param.input_param.fault_message_port, param.input_param.multicast_ip_address);
@@ -276,30 +237,7 @@ int Lidar<T_Point>::Init(const DriverParam& param) {
     case DATA_FROM_LIDAR: 
     case DATA_FROM_LIDAR_TCP:
     {
-      if (param.input_param.use_someip) {
-        if (someip_client_->correction_data_.size() == 0) {
-          LogError("---Failed to obtain correction file from lidar by someip!---");
-          LoadCorrectionFile(param.input_param.correction_file_path);
-        }
-        else {
-          LoadCorrectionString((char *)someip_client_->correction_data_.data(), someip_client_->correction_data_.size());
-        }
-        if (someip_client_->firetime_data_.size() == 0) {
-          LogError("---Failed to obtain firetime file from lidar by someip!---");
-          LoadCorrectionFile(param.input_param.firetimes_path);
-        }
-        else {
-          udp_parser_->LoadFiretimesString((char *)someip_client_->firetime_data_.data(), someip_client_->firetime_data_.size());
-        }
-        if (someip_client_->dcf_data_.size() == 0) {
-          LogWarning("---Failed to obtain dcf file from lidar by someip!---");
-          udp_parser_->LoadDcfConfigFile(param.input_param.dcf_file_path);
-        }
-        else {
-          udp_parser_->LoadDcfConfigString((char *)someip_client_->dcf_data_.data(), someip_client_->dcf_data_.size());
-        }
-      }
-      else if (param.input_param.use_ptc_connected) { 
+      if (param.input_param.use_ptc_connected) { 
         auto ptc_start_time = std::chrono::high_resolution_clock::now();
         while (ptc_client_ != nullptr && (!ptc_client_->IsOpen()) && init_running) {
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -854,14 +792,5 @@ template <typename T_Point>
 std::string Lidar<T_Point>::GetLidarType() {
   return udp_parser_->GetLidarType();
 }
-
-template <typename T_Point>
-bool Lidar<T_Point>::setLidarModeBySomeip(uint8_t mode) {
-  if (someip_client_ != nullptr)
-    return someip_client_->SetLidarStatus(mode);
-  return false;
-}
-
-
 
 #endif

@@ -77,9 +77,6 @@ int main(int argc, char *argv[])
 
   param.input_param.host_ip_address = ""; // point cloud destination ip, local ip
   param.input_param.fault_message_port = 0; // fault message destination port, 0: not use
-  //someip subscribe
-  param.input_param.use_someip = true;  // someip subscribe point cloud and fault message
-  param.input_param.someip_matrix_path = "Your someip matrix path";
   // PtcMode::tcp_ssl use
   param.input_param.certFile = "";
   param.input_param.privateKeyFile = "";

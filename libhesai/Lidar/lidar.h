@@ -46,7 +46,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "driver_param.h"
 #include "serial_source.h"
 #include "serial_client.h"
-#include "someip_client.h"
 #include "tcp_source.h"
 #include "pcap_saver.h"
 #ifndef _MSC_VER
@@ -145,7 +144,6 @@ public:
   UdpParser<T_Point> *GetUdpParser();
   GeneralParser<T_Point> *GetGeneralParser();
   std::string GetLidarType();
-  bool setLidarModeBySomeip(uint8_t mode);
 
   std::shared_ptr<PtcClient> ptc_client_;
   LidarDecodedFrame<T_Point> frame_;
@@ -159,7 +157,6 @@ private:
   std::shared_ptr<Source> source_fault_message_;
   std::shared_ptr<Source> source_rs232_;
   std::shared_ptr<SerialClient> serial_client_;
-  std::shared_ptr<SomeIPClient> someip_client_;
   BlockingRing<int, kPacketBufferSize> decoded_packets_buffer_;
   uint16_t ptc_port_;
   uint16_t udp_port_;

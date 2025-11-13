@@ -128,7 +128,6 @@ int main(int argc, char *argv[])
   param.input_param.correction_file_path = "Your correction file path";
   param.input_param.firetimes_path = "Your firetime file path";
 
-  param.input_param.use_someip = false;  // someip subscribe point cloud and fault message
   param.input_param.host_ip_address = ""; // point cloud destination ip, local ip
   param.input_param.fault_message_port = 9348; // fault message destination port
 
