@@ -387,11 +387,24 @@ void SerialSource::ReceivedThread() {
       }
       if (serialData[dataIndex] == 0xee && serialData[dataIndex + 1] == 0xff) 
       {
-        if (cmdAckRecvBuf.full()) cmdAckRecvBuf.eff_pop_front();
+        if (pointCloudRecvBuf.full()) pointCloudRecvBuf.eff_pop_front();
         if (serialData[dataIndex + 5] == 0x00) {
-          if (dataLength - dataIndex < 80) break;
-          pointCloudRecvBuf.emplace_back(serialData + dataIndex, 80);
-          dataIndex += 80;
+          uint32_t point_cloud_len = 80;
+          if (serialData[dataIndex + 3] == 0x08) {
+            point_cloud_len = 80;
+          }
+          else if (serialData[dataIndex + 3] == 0x0C) {
+            point_cloud_len = 132;
+          }
+          else {
+            recv_error_point_cloud_num++;
+            if (recv_error_point_cloud_num % 10000 == 1) {
+              LogError("serial recv error point cloud, protocol Version: %02x %02x", serialData[dataIndex + 2], serialData[dataIndex + 3]);
+            }
+          }
+          if (dataLength - dataIndex < point_cloud_len) break;
+          pointCloudRecvBuf.emplace_back(serialData + dataIndex, point_cloud_len);
+          dataIndex += point_cloud_len;
           break;
         } else if (serialData[dataIndex + 5] == 0x01) {
           if (dataLength - dataIndex < 34) break;

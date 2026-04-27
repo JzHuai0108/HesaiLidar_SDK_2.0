@@ -111,6 +111,7 @@ public:
 
 private:
   void ReceivedThread();
+  uint32_t recv_error_point_cloud_num = 0;
   bool running;
   std::thread* runningRecvThreadPtr;
   BlockingRing<UdpPacket, 10> cmdAckRecvBuf;

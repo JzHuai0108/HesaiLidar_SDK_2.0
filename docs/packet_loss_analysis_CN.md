@@ -3,53 +3,78 @@
 
 
 ## 准备
-统计SDK解析的激光雷达UDP数据的丢包率一共有三种方式，这里展示的是 **方法1**。其他方法参见 **更多参考**。
+
+统计SDK解析的激光雷达UDP数据的丢包率一共有三种方式。
 
 #### 方法1：统计一段时间内的丢包率和时间戳跳变率
-进入 [packet_loss_tool.cc](../tool/packet_loss_tool.cc)
 
-解析配置参考 **[如何在线解析激光雷达数据](../docs/parsing_lidar_data_online_CN.md)** 和 **[如何离线解析PCAP文件数据](../docs/parsing_pcap_file_data_offline_CN.md)**
-
-可以根据需要修改代码中的统计丢包的时间
-```cpp
-float run_time = 15;  //统计15s
+复制示例配置文件并修改参数：
+```bash
+cp config/sample_config.example.ini config/sample_config.ini
 ```
+
+编辑 `config/sample_config.ini` 配置数据源并启用丢包检测：
+
+```ini
+[source_type]
+source_type = network
+
+[network]
+device_ip_address = 192.168.1.201
+# ... 其他网络参数
+
+[decoder]
+enable_packet_loss_tool = true           # 启用丢包统计
+enable_packet_timeloss_tool = true       # 启用时间戳跳变检测
+packet_timeloss_tool_continue = false    # 时间跳变检测后继续
+
+[packet_loss]
+run_time = 15                            # 统计时间（秒），必须 > 0 才启用检测模式
+```
+
+数据源配置参考 **[如何在线解析激光雷达数据](../docs/parsing_lidar_data_online_CN.md)** 和 **[如何离线解析PCAP文件数据](../docs/parsing_pcap_file_data_offline_CN.md)**
 
 ## 操作
 ### 1 编译
 在HesaiLidar_SDK_2.0文件夹下，启动Terminal终端，执行以下指令。
 ```bash
-cd HesaiLidar_SDK_2.0/tool
-mkdir build
+cd HesaiLidar_SDK_2.0
+mkdir -p build
 cd build
 cmake ..
 make
 ```
 
 ### 2 运行
-成功编译后，在build文件夹下运行生成的packet_loss_tool可执行文件，可添加参数指定运行时间(s)，若不指定运行时间，则默认为15s
+成功编译后，在build文件夹下运行生成的sample可执行文件，需指定配置文件：
 ```bash
-./packet_loss_tool 15
+./sample /path/to/sample_config.ini
 ```
+
 输出示例：
 ```log
-total recevice packet time: 15000ms  // 统计时间
-total receviced packet count: 93229  // 统计总包数
-package loss: 
-total loss packet count: 0  // 统计总丢包数  
-timestamp loss: 
-total loss packet count: 0  // 统计总时间戳跳变数
+======== Packet Loss Report ========
+Statistics time: 15000 ms
+Total received packets: 93229
+Sequence loss count: 0
+Timestamp loss count: 0
+=====================================
 ```
 
 
 ## 更多参考
 #### 方法2：统计1s内两次丢包之间总共的丢包率
-进入 [test.cc](../test/test.cc)
-```cpp
-// 使能丢包统计
-param.decoder_param.enable_packet_loss_tool = true; // 开启丢包统计功能
+
+编辑配置文件：
+```ini
+[decoder]
+enable_packet_loss_tool = true
+
+[packet_loss]
+run_time = 0                             # 设置为0使用持续监控模式
 ```
-编译和运行方式参考方法1。当出现丢包时，终端会打印类似如下警告信息：
+
+当出现丢包时，终端会打印类似如下警告信息：
 ```log
 [WARNING] pkt loss freq: 3 / 56268
 ```
@@ -92,3 +117,7 @@ sample.RegRecvCallback(packetLossCallback);
 [Frame Loss Rate]  97.47% (20241 / 20767)
 [Total Loss Rate]  2.12% (20241 / 956569)
 ```
+
+## 配置文件参考
+
+完整配置文件参数请参考 [sample_config.example.ini](../config/sample_config.example.ini)

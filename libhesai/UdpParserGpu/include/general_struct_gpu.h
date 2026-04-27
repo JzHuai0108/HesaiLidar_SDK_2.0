@@ -38,6 +38,8 @@ struct CudaPointXYZAER {
     float z;
     float azimuthCalib;
     float elevationCalib;
+    float distance;
+    float azimuth;
     uint8_t reserved[8];
 };
 

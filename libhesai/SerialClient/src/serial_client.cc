@@ -28,100 +28,19 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include "serial_client.h"
-
+#include "../../SerialParser/serial_parser.h"
 using namespace hesai::lidar;
 
 SerialClient::SerialClient() {
-  CRCInit();
 }
 
 SerialClient::~SerialClient() {
 }
 
-void SerialClient::AddEndStreamEncode(u8Array_t &byteStreamOut, const CmdType type) {
-  uint32_t rand = 0;
-  if (type == kCmd) {
-    rand = GetRandom();
-    byteStreamOut.push_back(static_cast<uint8_t>(rand));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 8));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 16));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 24));
-  }
-  uint32_t crc_in_len = byteStreamOut.size() - crc_begin;
-  uint32_t crc_in_len_true = 0;
-  if (crc_in_len % 4 != 0 && crc_in_len == 30) {
-    crc_in_len_true = 32;
-  } else if (crc_in_len % 4 != 0 && crc_in_len != 30) {
-    crc_in_len_true = 4 * (crc_in_len / 4 + 1);
-  } else {
-    crc_in_len_true = crc_in_len;
-  }
-  rand = CRCCalc(byteStreamOut.data() + crc_begin, crc_in_len, crc_in_len_true - crc_in_len);
-  if (type == kCmd) {
-    byteStreamOut.push_back(static_cast<uint8_t>(rand));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 8));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 16));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 24));
-  } else if (type == kOta) {
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 24));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 16));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 8));
-    byteStreamOut.push_back(static_cast<uint8_t>(rand >> 0));
-  }
-  byteStreamOut.push_back(0xEE);
-  byteStreamOut.push_back(0xFF);
-}
-
-void SerialClient::SerialStreamEncode(const CmdType type, u8Array_t &byteStream) {
-  SerialHeader *pHeader = (SerialHeader *)byteStream.data();
-  if (type == kCmd)
-    pHeader->InitCmd();
-  else if (type == kOta)
-    pHeader->InitOta();
-  AddEndStreamEncode(byteStream, type);
-}
-
-bool SerialClient::SerialStreamDecode(const CmdType type, const u8Array_t &byteStreamIn, u8Array_t &byteStreamOut) {
-  int len = byteStreamIn.size();
-  if (byteStreamIn[len - 2] != 0xEE || byteStreamIn[len - 1] != 0xFF) {
-    return false;
-  }
-  uint32_t crc_in_len = len - 13;
-  uint32_t crc_in_len_true = 0;
-  u8Array_t crc_in;
-  if (crc_in_len % 4 != 0 && crc_in_len == 30) {
-    crc_in_len_true = 32;
-  } else if (crc_in_len % 4 != 0 && crc_in_len != 30) {
-    crc_in_len_true = 4 * (crc_in_len / 4 + 1);
-  } else {
-    crc_in_len_true = crc_in_len;
-  }
-  uint8_t *ptr = (uint8_t *)byteStreamIn.data();
-  ptr += len - 6;
-  uint32_t crc = 0;
-  if (type == kCmd)
-    crc = *((uint32_t *)ptr);
-  else if (type == kOta)
-    crc = *(ptr) * 0x1000000 + *(ptr + 1) * 0x10000 + *(ptr + 2) * 0x100 + *(ptr + 3);
-  uint32_t check_crc = CRCCalc(byteStreamIn.data() + crc_begin, crc_in_len, crc_in_len_true - crc_in_len);
-  if(crc != check_crc) {
-    return false;
-  }
-  byteStreamOut.resize(len - 17);
-  std::copy_n(byteStreamIn.begin() + crc_begin, len - 17, byteStreamOut.begin());
-  return true;
-}
-
-
 int SerialClient::QueryCommand(const uint8_t cmd, const u8Array_t &payload, u8Array_t &byteStreamOut, uint32_t timeout) {
   if (source_send_ == nullptr || source_recv_ == nullptr || source_send_->IsOpened() == false || source_recv_->IsOpened() == false) return kInvalidEquipment;
   u8Array_t sendCommand;
-  sendCommand.resize(sizeof(SerialHeader));
-  sendCommand.push_back(static_cast<uint8_t>(payload.size() + 1));
-  sendCommand.push_back(cmd);
-  sendCommand.resize(payload.size() + sizeof(SerialHeader) + 2);
-  memcpy(sendCommand.data() + sizeof(SerialHeader) + 2, payload.data(), payload.size());
-  SerialStreamEncode(kCmd, sendCommand);
+  SerialParser::SerialStreamEncode(kCmd, cmd, payload, sendCommand);
 
   std::string sendMsg = BytePrinter::getInstance().printByteArrayToString(sendCommand);
   ProduceLogMessage("SEND: " + sendMsg);
@@ -140,7 +59,7 @@ int SerialClient::QueryCommand(const uint8_t cmd, const u8Array_t &payload, u8Ar
   std::string recvMsg = BytePrinter::getInstance().printByteArrayToString(recvData);
   ProduceLogMessage("RECV: " + recvMsg);
 
-  bool ret = SerialStreamDecode(kCmd, recvData, byteStreamOut);
+  bool ret = SerialParser::SerialStreamDecode(kCmd, recvData, byteStreamOut);
   if (ret == false) return kInvalidData;
   return 0;
 }
@@ -157,10 +76,10 @@ int SerialClient::RecvSpecialAckData(uint8_t &status, uint8_t &ret_code, int tim
   std::string recvMsg = BytePrinter::getInstance().printByteArrayToString(recvData);
   ProduceLogMessage("RECV: " + recvMsg);
 
-  bool ret = SerialStreamDecode(kOta, recvData, byteStreamOut);
-  if (ret == false || byteStreamOut.size() == 0 || byteStreamOut[0] + 2 != int(byteStreamOut.size())) return kInvalidData;
+  bool ret = SerialParser::SerialStreamDecode(kOta, recvData, byteStreamOut);
+  if (ret == false || byteStreamOut.size() == 0) return kInvalidData;
   status = byteStreamOut[1];
-  ret_code = byteStreamOut[byteStreamOut.size() - 1];
+  ret_code = byteStreamOut.back();
   return 0;
 }
 
@@ -204,16 +123,17 @@ int SerialClient::GetCorrectionInfo(u8Array_t &dataOut) {
   payload.push_back(0x07);
   payload.push_back(0x00);
   int ret = QueryCommand(0x02, payload, byteStreamOut, 5000);
-  ChangeMode(m_now_mode);
+  ChangeMode(now_mode_);
   if (ret != 0) {
     return ret;
   }
-  if (byteStreamOut.size() != (size_t)(byteStreamOut[0] + 2) || byteStreamOut[1] != 0x02 || byteStreamOut[2] != 0x07 
-      || byteStreamOut[3] != 0x00 || (size_t)(byteStreamOut[4] + 6) != byteStreamOut.size()) {
+  if (byteStreamOut.size() < 6) return kInvalidData;
+  if (byteStreamOut[1] != 0x02 || byteStreamOut[2] != 0x07 || byteStreamOut[3] != 0x00 
+      || static_cast<size_t>(byteStreamOut[4] + 6) != byteStreamOut.size()) {
     return kInvalidData;
   }
-  if (byteStreamOut[byteStreamOut.size() - 1] != 0x00) {
-    return (byteStreamOut[byteStreamOut.size() - 1]);
+  if (byteStreamOut.back() != 0x00) {
+    return static_cast<int>(byteStreamOut.back());
   }
   dataOut.resize(byteStreamOut[4]);
   std::copy_n(byteStreamOut.begin() + 5, byteStreamOut[4], dataOut.begin());
@@ -227,15 +147,15 @@ int SerialClient::GetSnInfo(u8Array_t &dataOut) {
   payload.push_back(0x01);
   payload.resize(38);
   int ret = QueryCommand(0x02, payload, byteStreamOut, 5000);
-  ChangeMode(m_now_mode);
+  ChangeMode(now_mode_);
   if (ret != 0) {
     return ret;
   }
   if (byteStreamOut.size() != 41 || byteStreamOut[1] != 0x02 || byteStreamOut[2] != 0x0A || byteStreamOut[3] != 0x01) {
     return kInvalidData;
   }
-  if (byteStreamOut[byteStreamOut.size() - 1] != 0x00) {
-    return (byteStreamOut[byteStreamOut.size() - 1]);
+  if (byteStreamOut.back() != 0x00) {
+    return static_cast<int>(byteStreamOut.back());
   }
   dataOut.resize(36);
   std::copy_n(byteStreamOut.begin() + 4, 36, dataOut.begin());
@@ -249,15 +169,15 @@ int SerialClient::GetLidarVersion(u8Array_t &dataOut, uint8_t type) {
   payload.push_back(type);
   payload.resize(27);
   int ret = QueryCommand(0x02, payload, byteStreamOut, 1000);
-  ChangeMode(m_now_mode);
+  ChangeMode(now_mode_);
   if (ret != 0) {
     return ret;
   }
   if (byteStreamOut.size() != 30 || byteStreamOut[1] != 0x02 || byteStreamOut[2] != 0x0F) {
     return kInvalidDataHeader;
   }
-  if (byteStreamOut[byteStreamOut.size() - 1] != 0x00) {
-    return (byteStreamOut[byteStreamOut.size() - 1]);
+  if (byteStreamOut.back() != 0x00) {
+    return static_cast<int>(byteStreamOut.back());
   }
   dataOut.resize(24);
   std::copy_n(byteStreamOut.begin() + 4, 24, dataOut.begin());
@@ -270,15 +190,15 @@ int SerialClient::GetLidarFaultState(u8Array_t &dataOut) {
   payload.push_back(0x08);
   payload.push_back(0x21);
   int ret = QueryCommand(0x02, payload, byteStreamOut, 5000);
-  ChangeMode(m_now_mode);
+  ChangeMode(now_mode_);
   if (ret != 0) {
     return ret;
   }
   if (byteStreamOut[1] != 0x02 || byteStreamOut[2] != 0x08 || byteStreamOut[3] != 0xA1) {
     return kInvalidDataHeader;
   }
-  if (byteStreamOut[byteStreamOut.size() - 1] != 0x00) {
-    return (byteStreamOut[byteStreamOut.size() - 1]);
+  if (byteStreamOut.back() != 0x00) {
+    return static_cast<int>(byteStreamOut.back());
   }
   dataOut.resize(byteStreamOut.size() - 5);
   std::copy_n(byteStreamOut.begin() + 4, byteStreamOut.size() - 5, dataOut.begin());
@@ -307,7 +227,7 @@ int SerialClient::OtaQueryCommand(const uint32_t all_num, const uint32_t num, co
   sendCommand.push_back(static_cast<uint8_t>(len >> 0));
   sendCommand.resize(sendCommand.size() + len);
   memcpy(sendCommand.data() + sizeof(SerialHeader) + 16, payload, len);
-  SerialStreamEncode(kOta, sendCommand);
+  SerialParser::SerialStreamEncode(kOta, sendCommand);
   source_recv_->SetReceiveStype(SERIAL_CLEAR_RECV_BUF);
   if (source_recv_->Send(sendCommand.data(), sendCommand.size(), 0) < 0) {
     return kInvalidEquipment;
@@ -322,35 +242,6 @@ int SerialClient::OtaQueryCommand(const uint32_t all_num, const uint32_t num, co
 void SerialClient::SetSerial(Source* source_send, Source* source_recv) {
   source_send_ = source_send;
   source_recv_ = source_recv;
-}
-
-void SerialClient::CRCInit() {
-  uint32_t i, j;
-
-  for (i = 0; i < 256; i++) {
-    uint32_t k = 0;
-    for (j = (i << 24) | 0x800000; j != 0x80000000; j <<= 1)
-      k = (k << 1) ^ (((k ^ j) & 0x80000000) ? 0x04c11db7 : 0);
-
-    m_CRCTable[i] = k;
-  }
-}
-
-uint32_t SerialClient::CRCCalc(const uint8_t *bytes, int len,  int zeros_num) {
-  uint32_t i_crc = 0xffffffff;
-  int i = 0;
-  for (i = 0; i < len; i++)
-    i_crc = (i_crc << 8) ^ m_CRCTable[((i_crc >> 24) ^ bytes[i]) & 0xff];
-  for (i = 0; i < zeros_num; i++)
-    i_crc = (i_crc << 8) ^ m_CRCTable[((i_crc >> 24) ^ 0) & 0xff];
-  return i_crc;
-}
-
-uint32_t SerialClient::GetRandom() {
-  std::random_device rd;
-  std::mt19937 generator(rd());
-  std::uniform_int_distribution<uint32_t> distribution;
-  return distribution(generator);
 }
 
 void SerialClient::ProduceLogMessage(const std::string& message) {
@@ -411,7 +302,7 @@ int SerialClient::GetPblVersionIdInPbl(u8Array_t &byteStreamOut) {
   sendCommand.push_back(static_cast<uint8_t>(len >> 8));
   sendCommand.push_back(static_cast<uint8_t>(len >> 0));
   sendCommand.resize(sendCommand.size() + len, 0xFF);
-  SerialStreamEncode(kOta, sendCommand);
+  SerialParser::SerialStreamEncode(kOta, sendCommand);
 
   std::string sendMsg = BytePrinter::getInstance().printByteArrayToString(sendCommand);
   ProduceLogMessage("SEND: " + sendMsg);

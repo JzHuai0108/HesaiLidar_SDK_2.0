@@ -105,8 +105,13 @@ class UdpP40ParserGpu: public GeneralParserGpu<T_Point>{
             set_ring(ptinfo, channel_index);
             set_intensity(ptinfo, point.reserved[0]);
             set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
-            set_timeSecond(ptinfo, timestamp / kNanosecondToSecondInt);
-            set_timeNanosecond(ptinfo, timestamp % kNanosecondToSecondInt);
+            set_timeSecond_lazy(ptinfo, [timestamp]() { return timestamp / kNanosecondToSecondInt; });
+            set_timeNanosecond_lazy(ptinfo, [timestamp]() {return timestamp % kNanosecondToSecondInt; });
+            set_azimuth(ptinfo, point.azimuth); 
+            set_azimuthCalib(ptinfo, azi_); 
+            set_elevation(ptinfo, this->correction_ptr->elevation[channel_index]);
+            set_elevationCalib(ptinfo, elev_); 
+            set_distance(ptinfo, point.distance); 
 
             point_num++;
           }

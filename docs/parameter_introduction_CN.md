@@ -17,7 +17,7 @@
 2. `fov_start`/`fov_end`: 有效视场范围 (角度值)，此范围外的点云将被过滤  
    *(默认: 0.0-360.0)*
 
-3. `channel_fov_filter_path`: 配置文件路径(功能:对多组通道下多组范围的水平角进行滤除)，格式参考correction/config/channel_fov_filter.txt
+3. `channel_fov_filter_path`: 配置文件路径(功能:对多组通道下多组范围的水平角进行滤除)，格式参考config/channel_fov_filter.txt
 
 4. `multi_fov_filter_ranges`: 相比较于channel_fov_filter_path参数，该参数与channel_fov_filter_path参数功能类似，但针对的是所有的通道。即对所有通道进行滤除。此处配置用法较为方便，但没有指定通道灵活。好处是cpu占用会比channel_fov_filter_path少一些，且配置简单些。比如"[20,30];[40,200]"。为字符串配置，每个范围用";"隔开，每个范围用"[]"括起来，范围的开闭区间中间用逗号隔开，如"[20,30]"。
 

@@ -95,6 +95,12 @@ void Logger::Stop()
     {
         spthread_->join();  
     }
+
+    if (fp_ != NULL) {
+        fflush(fp_);
+        fclose(fp_);
+        fp_ = NULL;
+    }
     running_ = false;
 }  
   
@@ -192,9 +198,10 @@ void Logger::threadfunc()
   
         //写日志  
         const std::string& str = queue_.front();  
-  
-        fwrite((void*)str.c_str(), str.length(), 1, fp_);  
-        fflush(fp_);  
+        if (fp_ != NULL) {
+            fwrite((void*)str.c_str(), str.length(), 1, fp_);  
+            fflush(fp_);  
+        }
         queue_.pop_front();  
     }  
 }

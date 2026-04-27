@@ -1,45 +1,69 @@
 #include "hesai_lidar_sdk.hpp"
+#include "../config/driver_sample_config.hpp"
 
-#include"lasreader.hpp"
-#include"laswriter.hpp"
+#include <cstring>
+#include <fstream>
+#include <string>
+#include <unordered_map>
+#include <cfloat>
+#include <ctime>
+#include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#define MKDIR(path) _mkdir(path)
+#else
+#define MKDIR(path) mkdir(path, 0755)
+#endif
 
-#include<cfloat>
+#include "lasreader.hpp"
+#include "laswriter.hpp"
 
-//#define SAVE_LAS_FILE
-#define SAVE_LAZ_FILE     
-
-#define LIDAR_PARSER_TEST
-// #define SERIAL_PARSER_TEST
-// #define PCAP_PARSER_TEST
-// #define EXTERNAL_INPUT_PARSER_TEST
+#ifndef SPEC_LIDAR
+using ToolPointType = LidarPointXYZIRT;
+#endif
 
 std::mutex mex_viewer;
-uint32_t last_frame_time;
-uint32_t cur_frame_time;
-//log info, display frame message
-void lidarCallback(const LidarDecodedFrame<LidarPointXYZIRT>  &frame) {  
+uint32_t last_frame_time = 0;
+uint32_t cur_frame_time = 0;
+
+namespace {
+struct LasToolOptions {
+  bool save_las = false;
+  bool save_laz = true;
+  std::string output_dir = "out_las";
+  bool output_dir_with_timestamp = false;
+};
+LasToolOptions g_las_opts;
+std::string g_output_dir;
+}  // namespace
+
+void lidarCallback(const LidarDecodedFrame<ToolPointType>& frame) {
   cur_frame_time = GetMicroTickCount();
+  if (last_frame_time == 0) last_frame_time = GetMicroTickCount();
   if (cur_frame_time - last_frame_time > kMaxTimeInterval) {
     printf("Time between last frame and cur frame is: %u us\n", (cur_frame_time - last_frame_time));
   }
   last_frame_time = cur_frame_time;
-  printf("frame:%d points:%u packet:%u start time:%lf end time:%lf\n",frame.frame_index, frame.points_num, frame.packet_num, frame.frame_start_timestamp, frame.frame_end_timestamp);
-  mex_viewer.lock();
-  LASwriteOpener laswriteropener;
-std::string file_name1 = "./PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".las";
-std::string file_name2 = "./PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".laz";
+  printf("frame:%d points:%u packet:%u start time:%lf end time:%lf\n",
+         frame.frame_index, frame.points_num, frame.packet_num,
+         frame.frame_start_timestamp, frame.frame_end_timestamp);
 
-#ifdef SAVE_LAS_FILE
-const char* las_name = file_name1.c_str();
-#endif
-#ifdef SAVE_LAZ_FILE
-const char* las_name = file_name2.c_str();
-  //laswriteropener.set_compress(true);
-#endif
-#if defined(SAVE_LAS_FILE) || defined(SAVE_LAZ_FILE)
+  if (!g_las_opts.save_las && !g_las_opts.save_laz) return;
+  if (frame.points_num == 0) return;
+
+  mex_viewer.lock();
+
+  LASwriteOpener laswriteropener;
+  std::string file_name_las = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" +
+                               std::to_string(frame.frame_start_timestamp) + ".las";
+  std::string file_name_laz = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" +
+                               std::to_string(frame.frame_start_timestamp) + ".laz";
+
+  const char* las_name = g_las_opts.save_laz ? file_name_laz.c_str() : file_name_las.c_str();
   laswriteropener.set_file_name(las_name);
+
   std::time_t t = std::time(nullptr);
-  std::tm *now = std::localtime(&t);
+  std::tm* now = std::localtime(&t);
   uint16_t las_year = now->tm_year + 1900;
   uint16_t las_day = now->tm_mday;
 
@@ -58,19 +82,20 @@ const char* las_name = file_name2.c_str();
   LASwriter* laswriter = laswriteropener.open(&header);
 
   LASpoint point;
-  point.init(&header,header.point_data_format,header.point_data_record_length,&header);
+  point.init(&header, header.point_data_format, header.point_data_record_length, &header);
 
   double max_x = -DBL_MAX, max_y = -DBL_MAX, max_z = -DBL_MAX;
   double min_x = DBL_MAX, min_y = DBL_MAX, min_z = DBL_MAX;
 
-
-  for(uint32_t i=0; i < frame.points_num; i++){
+  for (uint32_t i = 0; i < frame.points_num; i++) {
     double las_x = frame.points[i].x * 10000;
     double las_y = frame.points[i].y * 10000;
     double las_z = frame.points[i].z * 10000;
+#ifndef SPEC_LIDAR
     uint16_t las_intensity = frame.points[i].intensity;
     double las_time = frame.points[i].timestamp;
     uint16_t las_ring = frame.points[i].ring;
+#endif
 
     point.set_x(las_x);
     point.set_y(las_y);
@@ -78,96 +103,132 @@ const char* las_name = file_name2.c_str();
     point.set_intensity(las_intensity);
     point.set_point_source_ID(las_ring);
 
-    if(las_x > max_x){
-      max_x = las_x;
-    }
-    if(las_x < min_x){
-      min_x = las_x;
-    }
-    if(las_y > max_y){
-      max_y = las_y;
-    }
-    if(las_y < min_y){
-      min_y = las_y;
-    }
-    if(las_z > max_z){
-      max_z = las_z;
-    }
-    if(las_z < min_z){
-      min_z = las_z;
-    }
+    if (las_x > max_x) max_x = las_x;
+    if (las_x < min_x) min_x = las_x;
+    if (las_y > max_y) max_y = las_y;
+    if (las_y < min_y) min_y = las_y;
+    if (las_z > max_z) max_z = las_z;
+    if (las_z < min_z) min_z = las_z;
 
     point.set_gps_time(las_time);
-
     laswriter->write_point(&point);
     laswriter->update_inventory(&point);
   }
+
   header.set_bounding_box(min_x, min_y, min_z, max_x, max_y, max_z);
   laswriter->update_header(&header, TRUE);
-
   laswriter->close();
   delete laswriter;
-#endif
+
   mex_viewer.unlock();
 }
 
-int main(int argc, char *argv[])
-{
+bool IsPlayEnded(HesaiLidarSdk<ToolPointType>& sdk) {
+  return sdk.lidar_ptr_->IsPlayEnded();
+}
+
+static void PrintUsage(const char* prog) {
+  fprintf(stderr, "Usage: %s <config.ini> [use_gpu]\n", prog);
+  fprintf(stderr, "  config.ini  - INI configuration file (required)\n");
+  fprintf(stderr, "  use_gpu     - 1 to enable GPU acceleration (optional)\n");
+  fprintf(stderr, "\nExample:\n");
+  fprintf(stderr, "  %s tool_sample_config.ini\n", prog);
+  fprintf(stderr, "  %s tool_sample_config.ini 1\n", prog);
+}
+
+int main(int argc, char* argv[]) {
+#ifndef SPEC_LIDAR
   HesaiLidarSdk<LidarPointXYZIRT> sample;
-  DriverParam param;
-  // assign param
-  param.use_gpu = (argc > 1);
-#ifdef LIDAR_PARSER_TEST
-  param.input_param.source_type = DATA_FROM_LIDAR;
-  param.input_param.device_ip_address = "192.168.1.201";  // lidar ip
-  param.input_param.ptc_port = 9347; // lidar ptc port
-  param.input_param.udp_port = 2368; // point cloud destination port
-  param.input_param.multicast_ip_address = "";
-
-  param.input_param.use_ptc_connected = true;  // true: use PTC connected, false: recv correction from local file
-  param.input_param.correction_file_path = "Your correction file path";
-  param.input_param.firetimes_path = "Your firetime file path";
-
-  param.input_param.host_ip_address = ""; // point cloud destination ip, local ip
-  param.input_param.fault_message_port = 9348; // fault message destination port
-
-#elif defined (SERIAL_PARSER_TEST)
-  param.input_param.source_type = DATA_FROM_SERIAL;
-  param.input_param.rs485_com = "Your serial port name for receiving point cloud";
-  param.input_param.rs232_com = "Your serial port name for sending cmd";
-  param.input_param.point_cloud_baudrate = 3125000;
-  param.input_param.correction_file_path = "Your correction file path";
-
-#elif defined PCAP_PARSER_TEST
-  param.input_param.source_type = DATA_FROM_PCAP;
-  param.input_param.pcap_path = "Your pcap file path";
-  param.input_param.correction_file_path = "Your correction file path";
-  param.input_param.firetimes_path = "Your firetime file path";
-
-
-  param.decoder_param.pcap_play_synchronization = true;
-  param.decoder_param.pcap_play_in_loop = false; // pcap palyback
-
-#elif defined (EXTERNAL_INPUT_PARSER_TEST)
-  param.input_param.source_type = DATA_FROM_ROS_PACKET;
-  param.input_param.correction_file_path = "Your correction file path";
-  param.input_param.firetimes_path = "Your firetime file path";
 #endif
+  DriverParam param;
 
-  param.decoder_param.enable_packet_loss_tool = false;
-  param.decoder_param.socket_buffer_size = 262144000;
-  //init lidar with param
+  if (argc < 2) {
+    PrintUsage(argv[0]);
+    return 1;
+  }
+
+  std::ifstream probe(argv[1]);
+  if (!probe.good()) {
+    fprintf(stderr, "[las_tool] error: config file not found: %s\n", argv[1]);
+    PrintUsage(argv[0]);
+    return 1;
+  }
+  probe.close();
+
+  std::string err;
+  std::unordered_map<std::string, std::string> kv;
+  if (!hesai::lidar::sample_config::LoadIniMap(argv[1], &kv, &err)) {
+    fprintf(stderr, "[las_tool] config error: %s\n", err.c_str());
+    return 1;
+  }
+  if (!hesai::lidar::sample_config::PreprocessDriverSampleIniMap(&kv, &err)) {
+    fprintf(stderr, "[las_tool] config error: %s\n", err.c_str());
+    return 1;
+  }
+  if (!hesai::lidar::sample_config::ApplyToDriverParam(kv, "", &param, &err)) {
+    fprintf(stderr, "[las_tool] config error: %s\n", err.c_str());
+    return 1;
+  }
+
+  // Parse [las] section
+  if (const std::string* v = hesai::lidar::sample_config::Get(kv, "las.save_las")) {
+    hesai::lidar::sample_config::ParseBool(*v, &g_las_opts.save_las);
+  }
+  if (const std::string* v = hesai::lidar::sample_config::Get(kv, "las.save_laz")) {
+    hesai::lidar::sample_config::ParseBool(*v, &g_las_opts.save_laz);
+  }
+  if (const std::string* v = hesai::lidar::sample_config::Get(kv, "las.output_dir")) {
+    g_las_opts.output_dir = hesai::lidar::sample_config::Trim(*v);
+    if (g_las_opts.output_dir.empty()) g_las_opts.output_dir = "out_las";
+  }
+  if (const std::string* v = hesai::lidar::sample_config::Get(kv, "las.output_dir_with_timestamp")) {
+    hesai::lidar::sample_config::ParseBool(*v, &g_las_opts.output_dir_with_timestamp);
+  }
+
+  if (argc >= 3 && std::string(argv[2]) == "1") {
+    param.use_gpu = true;
+  }
+  printf("[las_tool] loaded config: %s\n", argv[1]);
+
+  g_output_dir = g_las_opts.output_dir;
+  if (g_las_opts.output_dir_with_timestamp) {
+    std::time_t now = std::time(nullptr);
+    std::tm* tm_now = std::localtime(&now);
+    char time_suffix[32];
+    std::strftime(time_suffix, sizeof(time_suffix), "_%Y-%m-%d_%H-%M-%S", tm_now);
+    g_output_dir += time_suffix;
+  }
+  if (MKDIR(g_output_dir.c_str()) == 0) {
+    printf("[las_tool] created output directory: %s\n", g_output_dir.c_str());
+  } else {
+    struct stat st;
+    if (stat(g_output_dir.c_str(), &st) == 0 && (st.st_mode & S_IFDIR)) {
+      printf("[las_tool] output directory exists: %s\n", g_output_dir.c_str());
+    } else {
+      fprintf(stderr, "[las_tool] warning: failed to create output directory: %s\n", g_output_dir.c_str());
+    }
+  }
+
+  if (param.decoder_param.socket_buffer_size == 0) {
+    param.decoder_param.socket_buffer_size = 262144000;
+  }
+
   sample.Init(param);
-
-  //assign callback fuction
   sample.RegRecvCallback(lidarCallback);
 
-  //star process thread
   last_frame_time = GetMicroTickCount();
   sample.Start();
-
-  while (1)
-  {
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+  if (sample.lidar_ptr_->GetInitFinish(FailInit)) {
+    sample.Stop();
+    return -1;
   }
+
+  while (!IsPlayEnded(sample) || GetMicroTickCount() - last_frame_time < 1000000) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  printf("The file has been parsed and we will exit the program.\n");
+  sample.Stop();
+  return 0;
 }

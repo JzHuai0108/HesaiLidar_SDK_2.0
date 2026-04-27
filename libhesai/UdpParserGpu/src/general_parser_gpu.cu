@@ -126,7 +126,7 @@ void GeneralParserGpu<T_Point>::reMalloc(uint32_t maxPackets, uint32_t maxPoints
 }
 
 template <typename T_Point>
-int GeneralParserGpu<T_Point>::IsChannelFovFilter(int fov, int channel_index, FrameDecodeParam &param) { 
+int GeneralParserGpu<T_Point>::IsChannelFovFilter(float fov, int channel_index, FrameDecodeParam &param) { 
   // high priority, filter some fov ranges for all channels. low cpu usage
   if (param.config.multi_fov_filter_ranges.size() > 0) {
     for (const auto & pair : param.config.multi_fov_filter_ranges) {

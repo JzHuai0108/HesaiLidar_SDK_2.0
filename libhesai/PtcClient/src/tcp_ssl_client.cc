@@ -461,7 +461,6 @@ int TcpSslClient::Send(uint8_t *u8Buf, uint16_t u16Len, int flags) {
       errno != EINTR) {
       LogError("Send errno %d",  errno);
       ERR_print_errors_fp(stderr);
-      Close();
       return -1;
     }
   }
@@ -481,7 +480,6 @@ int TcpSslClient::Receive(uint8_t *u8Buf, uint32_t u32Len, int flags) {
     len = sys_readn_by_ssl(ssl_, u8Buf , (int32_t)u32Len);
     if(len != (int32_t)u32Len) {
       LogError("ssl receive failed");
-		  Close();
       return -1;
     }
   }
