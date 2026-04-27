@@ -59,8 +59,9 @@ namespace lidar
       uint8_t SHA_value[32];
       bool setToFloatUseAngleDivision() {
         for (int i = 0; i < ATX_MAX_CHANNEL_NUM; i++) {
-          floatCorr.even_firetime_correction_[i] = raw_even_firetime_correction_[i] * angle_division * 1.0;
-          floatCorr.odd_firetime_correction_[i] = raw_odd_firetime_correction_[i] * angle_division * 1.0;
+          // angle_division has an endianness issue; fixed to 1
+          floatCorr.even_firetime_correction_[i] = raw_even_firetime_correction_[i] * 1.0;
+          floatCorr.odd_firetime_correction_[i] = raw_odd_firetime_correction_[i] * 1.0;
         } 
         return true;
       }

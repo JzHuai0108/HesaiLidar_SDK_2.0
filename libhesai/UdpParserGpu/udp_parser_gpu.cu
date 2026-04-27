@@ -38,6 +38,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "udp4_7_parser_gpu.h"
 #include "udp6_1_parser_gpu.h"
 #include "udp7_2_parser_gpu.h"
+#include "udp7_3_parser_gpu.h"
 
 using namespace hesai::lidar;
 template <typename T_Point>
@@ -128,6 +129,9 @@ void UdpParserGpu<T_Point>::SetLidarType(std::string lidar_type, uint16_t maxPac
   }
   else if (lidar_type == "PandarFT120" || lidar_type == "FT120C1X") {
     m_generalParserGpu = new Udp7_2ParserGpu<T_Point>(maxPacket, maxPoint);
+  }
+  else if (lidar_type == "PandarFT2" || lidar_type == "FTX" || lidar_type == "FT2") {
+    m_generalParserGpu = new Udp7_3ParserGpu<T_Point>(maxPacket, maxPoint);
   }
   else {
     LogFatal("GPU does not support this type of lidar");

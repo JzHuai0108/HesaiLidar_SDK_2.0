@@ -136,7 +136,7 @@ namespace lidar
 
       float getAzimuthAdjust(uint16_t ch, float azi) const{
         unsigned int i = std::floor(1.f * azi / floatCorr.adjust_interval);
-        unsigned int a = azi - i * floatCorr.adjust_interval;
+        float a = azi - i * floatCorr.adjust_interval;
         float k = 1.f * a / floatCorr.adjust_interval;
         int laser_index = ch;
         if (header.min_version == 5 || header.min_version == 6) {
@@ -151,7 +151,7 @@ namespace lidar
       }
       float getElevationAdjust(uint16_t ch,float azi) const{
         unsigned int i = std::floor(1.f * azi / floatCorr.adjust_interval);
-        unsigned int a = azi - i * floatCorr.adjust_interval;
+        float a = azi - i * floatCorr.adjust_interval;
         float k = 1.f * a / floatCorr.adjust_interval;
         int laser_index = ch;
         if (header.min_version == 5 || header.min_version == 6) {

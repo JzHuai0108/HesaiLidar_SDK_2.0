@@ -2,79 +2,69 @@
 HesaiLidar_SDK_2.0提供了将PCAP格式文件转换为PCD格式点云的示例代码。
 
 ## 准备
-进入 [pcl_tools.cc](../tool/pcl_tool.cc) 
 
-#### 1 选择需要保存的PCD格式
-
-示例代码中包含四个被注释掉的宏定义（`#define`），作用是控制程序转存不同类型PCD点云格式功能的启用或禁用
-
-选择需要的格式类型对应的宏，解注释即可 （可多选）
-
-```cpp
-/* ------------Select the required file format ------------ */
-#define SAVE_PCD_FILE_ASCII
-// #define SAVE_PCD_FILE_BIN
-// #define SAVE_PCD_FILE_BIN_COMPRESSED
-// #define SAVE_PLY_FILE
+复制示例配置文件并修改参数：
+```bash
+cp config/tool_sample_config.example.ini config/tool_sample_config.ini
 ```
 
-1. **`SAVE_PCD_FILE_ASCII`**  
-   启用这个宏定义，程序会以ASCII格式保存PCD文件。ASCII格式是一种文本格式，数据以可读的形式存储，便于调试和查看，但文件体积通常较大，读取和写入速度较慢。
+编辑 `config/tool_sample_config.ini` 配置数据源及PCD选项。
 
-2. **`SAVE_PCD_FILE_BIN`**  
-   启用这个宏定义，程序会以二进制格式保存PCD文件。二进制格式相比ASCII格式更高效，文件体积更小，读写速度更快，但数据不可直接阅读。
+#### 1 配置数据源
 
-3. **`SAVE_PCD_FILE_BIN_COMPRESSED`**  
-   启用这个宏定义，程序可能会以压缩的二进制格式保存PCD文件。这种格式在二进制的基础上进一步压缩数据，进一步减小文件体积。
+数据源配置参考 **[如何在线解析激光雷达数据](../docs/parsing_lidar_data_online_CN.md)** 和 **[如何离线解析PCAP文件数据](../docs/parsing_pcap_file_data_offline_CN.md)**
 
-4. **`SAVE_PLY_FILE`**  
-   启用这个宏定义后，程序可能会保存PLY文件（Polygon File Format或Stanford Triangle Format）。PLY文件是一种常用于存储三维数据的文件格式。
+以PCAP解析为例：
 
-#### 2 选择需要保存的成员变量
+```ini
+[source_type]
+source_type = pcap
 
-当前除默认保存的x y z之外，共支持六种成员变量，通过以下六个宏控制，选择需要的成员变量解注释即可
+[pcap]
+pcap_path = /path/to/your.pcap
+correction_file_path = /path/to/correction.csv
+firetimes_path = /path/to/firetimes.csv
 
-> 注意：部分成员变量需要先确认雷达是否支持，否则为全0。详见后续更多参考
-
-```cpp
-/* ------------Select the fields to be exported ------------ */
-#define ENABLE_TIMESTAMP
-#define ENABLE_RING
-#define ENABLE_INTENSITY
-// #define ENABLE_CONFIDENCE
-// #define ENABLE_WEIGHT_FACTOR
-// #define ENABLE_ENV_LIGHT
+[decoder]
+pcap_play_synchronization = true
+pcap_play_in_loop = false
 ```
-   1. **`ENABLE_TIMESTAMP`** ： 点云时间戳
-   2. **`ENABLE_RING`** ： 通道号
-   3. **`ENABLE_INTENSITY`** ： 反射强度
-   4. **`ENABLE_CONFIDENCE`** ： 置信度或其他标志位
-   5. **`ENABLE_WEIGHT_FACTOR`** ： 权重因子信息
-   6. **`ENABLE_ENV_LIGHT`** ： 环境光信息
 
+#### 2 选择需要保存的PCD格式
 
-#### 3 解析配置参考 **[如何在线解析激光雷达数据](../docs/parsing_lidar_data_online_CN.md)** 和 **[如何离线解析PCAP文件数据](../docs/parsing_pcap_file_data_offline_CN.md)**
+配置 `[pcl]` 节选择输出格式和选项：
 
-以PCAP解析为例
-
-``` cpp
-/* -------------------Select the test mode ------------------- */
-// #define LIDAR_PARSER_TEST
-// #define SERIAL_PARSER_TEST
-#define PCAP_PARSER_TEST
-// #define EXTERNAL_INPUT_PARSER_TEST
-... ... 
-
-#ifdef PCAP_PARSER_TEST
-  param.input_param.source_type = DATA_FROM_PCAP;                       // 设置数据来源为离线PCAP点云数据
-  param.input_param.pcap_path = "path/to/pcap";                         // 离线PCAP点云数据路径
-  param.input_param.correction_file_path = "/path/to/correction.csv";   // 校准文件（角度修正文件），建议使用雷达自身的校准文件
-  param.input_param.firetimes_path = "path/to/firetimes.csv";           // 可选项：通道发光时序（发光时刻修正文件）
-
-  param.decoder_param.pcap_play_synchronization = true;                 // 根据点云时间戳同步解析，模拟雷达实际频率
-  param.decoder_param.pcap_play_in_loop = false;                        // 循环解析PCAP
-#endif
+```ini
+[pcl]
+save_pcd_ascii = true              # 以ASCII格式保存PCD文件
+save_pcd_binary = false            # 以二进制格式保存PCD文件
+save_pcd_binary_compressed = false # 以压缩二进制格式保存PCD文件
+save_ply = false                   # 保存PLY文件
+enable_viewer = false              # 启用可视化查看器
+pcd_ascii_precision = 16           # ASCII格式数据精度
+output_dir = out_pcd               # 输出目录（默认：out_pcd）
+output_dir_with_timestamp = false  # 目录名是否带时间后缀（如：out_pcd_2026-05-31_10-12-01）
 ```
+
+**格式说明：**
+
+1. **`save_pcd_ascii`**  
+   以ASCII格式保存PCD文件。ASCII格式是一种文本格式，数据以可读的形式存储，便于调试和查看，但文件体积通常较大，读取和写入速度较慢。
+
+2. **`save_pcd_binary`**  
+   以二进制格式保存PCD文件。二进制格式相比ASCII格式更高效，文件体积更小，读写速度更快，但数据不可直接阅读。
+
+3. **`save_pcd_binary_compressed`**  
+   以压缩的二进制格式保存PCD文件。这种格式在二进制的基础上进一步压缩数据，进一步减小文件体积。
+
+4. **`save_ply`**  
+   保存PLY文件（Polygon File Format或Stanford Triangle Format）。PLY文件是一种常用于存储三维数据的文件格式。
+
+#### 3 选择需要保存的成员变量
+
+当前除默认保存的x y z之外，共支持六种成员变量。这些由 `pcl_tool.cc` 中的代码定义控制。详见后续更多参考。
+
+> 注意：部分成员变量需要先确认雷达是否支持，否则为全0。
 
 ## 操作
 ### 1 编译
@@ -88,9 +78,9 @@ make
 ```
 
 ### 2 运行
-成功编译后，在build文件夹下运行生成的pcl_tool可执行文件，系统会有可视化窗口。且在build文件夹下生成对应PCAP文件的每帧点云。
+成功编译后，在build文件夹下运行生成的pcl_tool可执行文件，需指定配置文件。系统会有可视化窗口（如启用）且在build文件夹下生成对应的每帧点云。
 ```bash
-./pcl_tool
+./pcl_tool /path/to/tool_sample_config.ini
 ```
 
 ## 更多参考
@@ -102,12 +92,10 @@ writer.writeASCII("output.pcd", cloud);
 ```
 按默认的方法保存的PCD文件数据精度有限，例如时间戳会表示为科学计数法。
 
-如何更改PCD文件数据精度？
-```cpp
-pcl::PCDWriter writer;
-// you can change the value of precision to adjust the precison
-int precision = 16;
-writer.writeASCII(file_name1, *pcl_pointcloud, precision);
+如何更改PCD文件数据精度？在配置文件中设置 `pcd_ascii_precision`：
+```ini
+[pcl]
+pcd_ascii_precision = 16
 ```
 
 #### 2 如何定义PCD文件名的时间戳
@@ -147,12 +135,12 @@ writer.writeASCII(file_name1, *pcl_pointcloud, precision);
 
 - 进入文件 [udp1_4_parser.cc](../libhesai/UdpParser/src/udp1_4_parser.cc) 中，搜索 `ComputeXYZI` 函数，在其中调用`set_addFlag` 函数实现对 `frame.points[point_index_rerank]` 的赋值
 
-#### 5 使用ENABLE_VIEWER可视化时，出现闪退问题
+#### 5 使用enable_viewer可视化时，出现闪退问题
 
 - 现象
 
    ```
-   当开启ENABLE_VIEWER时，可视化点云数据时，出现一些VTK相关警告，且程序直接出现core dumped错误，导致程序直接退出。
+   当开启enable_viewer时，可视化点云数据时，出现一些VTK相关警告，且程序直接出现core dumped错误，导致程序直接退出。
 
    一般出现在ubuntu22.04及其以上系统。
    ```
@@ -166,3 +154,7 @@ writer.writeASCII(file_name1, *pcl_pointcloud, precision);
       vtk7.1 + pcl1.10.0
       vtk9.1 + pcl1.14.1
    ```
+
+## 配置文件参考
+
+完整配置文件参数请参考 [tool_sample_config.example.ini](../config/tool_sample_config.example.ini)

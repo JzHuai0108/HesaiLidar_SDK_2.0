@@ -54,54 +54,6 @@ namespace hesai
 namespace lidar
 {
 
-enum ErrorCode {
-  kInvalidEquipment  = -1,
-  kInvalidData       = -2,
-  kReadTimeout       = -3,
-  kInvalidDataHeader = -4,
-  kSerialOpenError   = -5,
-  kInPblNotUpgrade   = -6,
-  kFailedCalibration = -7,
-};
-
-enum CmdType {
-  kCmd = 1,
-  kOta = 2,
-};
-
-#pragma pack(push, 1)
-struct SerialHeader {
-  uint8_t start_flag_[7];    
-  
-  SerialHeader() {
-    start_flag_[0] = 0;
-    start_flag_[1] = 0;
-    start_flag_[2] = 0;
-    start_flag_[3] = 0;
-    start_flag_[4] = 0;
-    start_flag_[5] = 0;
-    start_flag_[6] = 0;
-  }
-  void InitCmd() {
-    start_flag_[0] = 0x24;
-    start_flag_[1] = 0x4C;
-    start_flag_[2] = 0x44;
-    start_flag_[3] = 0x43;
-    start_flag_[4] = 0x4D;
-    start_flag_[5] = 0x44;
-    start_flag_[6] = 0x2C;
-  }
-  void InitOta() {
-    start_flag_[0] = 0x24;
-    start_flag_[1] = 0x4C;
-    start_flag_[2] = 0x44;
-    start_flag_[3] = 0x4F;
-    start_flag_[4] = 0x54;
-    start_flag_[5] = 0x41;
-    start_flag_[6] = 0x2C;
-  }
-};
-#pragma pack(pop)
 class SerialClient {
  public:
   using CallbackType = std::function<void(const std::string&)>; // 函数指针 std::function
@@ -121,21 +73,12 @@ class SerialClient {
   int GetPblVersionIdInPbl(u8Array_t &byteStreamOut);
   int RequestUpgradeLargePackage(uint8_t type);
   int OtaQueryCommand(const uint32_t all_num, const uint32_t num, const uint32_t len, const uint8_t *payload, uint8_t &status, uint8_t &ret_code, uint8_t type);
-  static const uint16_t crc_begin = 7;
-  uint32_t CRCCalc(const uint8_t *bytes, int len, int zeros_num);
   void SetCallback(CallbackType callback) { this->log_message_handler_callback_ = callback; }
   void ProduceLogMessage(const std::string& message); 
 
-  uint32_t m_CRCTable[256];  
-  uint8_t m_now_mode = 0;
+  uint8_t now_mode_ = 0;
   int UpgradeLidar(u8Array_t data, int mode, int &upgrade_progress);
  protected:
-  void AddEndStreamEncode(u8Array_t &byteStreamOut, const CmdType type);
-  void SerialStreamEncode(const CmdType type, u8Array_t &byteStream);
-  bool SerialStreamDecode(const CmdType type, const u8Array_t &byteStreamIn, u8Array_t &byteStreamOut);
-  void CRCInit();
-  uint32_t GetRandom();
-
   CallbackType log_message_handler_callback_ = nullptr;
   Source* source_send_;  
   Source* source_recv_;  

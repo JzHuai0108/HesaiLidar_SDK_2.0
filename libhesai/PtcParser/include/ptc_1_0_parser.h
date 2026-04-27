@@ -115,9 +115,6 @@ public:
   uint32_t GetHeaderPayloadLen() const { return header_.GetPayloadLen();}
 
   virtual bool SplitFileFrames(const u8Array_t &file, uint8_t u8Cmd, std::vector<u8Array_t>& packages);
-  void CRCInit();
-  uint32_t CRCCalc(uint8_t *bytes, int len); 
-  uint32_t m_CRCTable[256]; 
 
 private:
   PTCHeader_1_0 header_;

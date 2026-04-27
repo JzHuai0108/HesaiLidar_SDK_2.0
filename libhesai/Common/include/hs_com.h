@@ -39,7 +39,16 @@ namespace lidar
   inline typename std::enable_if<PANDAR_HAS_MEMBER(T_Point, member)>::type get_##member(T_Point& point, Type& value)  \
   {                                                                                                                    \
       value = point.member;                                                                                            \
-  }  
+  }                                                                                                                    \
+  template <typename T_Point, typename ValueFunc>                                                                      \
+  inline typename std::enable_if<!PANDAR_HAS_MEMBER(T_Point, member)>::type set_##member##_lazy(T_Point& point, ValueFunc&& value_func) \
+  {                                                                                                                    \
+  }                                                                                                                    \
+  template <typename T_Point, typename ValueFunc>                                                                      \
+  inline typename std::enable_if<PANDAR_HAS_MEMBER(T_Point, member)>::type set_##member##_lazy(T_Point& point, ValueFunc&& value_func) \
+  {                                                                                                                    \
+      point.member = value_func();                                                                                     \
+  }    
 
 DEFINE_MEMBER_CHECKER(x)
 DEFINE_MEMBER_CHECKER(y)
@@ -79,7 +88,10 @@ struct RemakeConfig {
   float max_elev = -1;
   float ring_elev_resolution = -1;
   int max_elev_scan = -1;   // (max_elev - min_elev) / ring_elev_resolution
+  bool use_ring_remake = false;
 };
+
+
 
 
 #define DEFAULT_MAX_MULTI_FRAME_NUM 10.0

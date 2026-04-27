@@ -2,78 +2,69 @@
 HesaiLidar_SDK_2.0 provides sample code for converting PCAP format files to PCD format point clouds.
 
 ## Preparation
-Navigate to [pcl_tools.cc](../tool/pcl_tool.cc) 
 
-#### 1 Select the Required PCD Format
-
-The sample code includes four commented macro definitions (`#define`) that control the enabling or disabling of different PCD point cloud format conversion functions.
-
-Select the macro corresponding to the desired format type and uncomment it (multiple selections allowed):
-
-```cpp
-/* ------------Select the required file format ------------ */
-#define SAVE_PCD_FILE_ASCII
-// #define SAVE_PCD_FILE_BIN
-// #define SAVE_PCD_FILE_BIN_COMPRESSED
-// #define SAVE_PLY_FILE
+Copy the example configuration file and modify the parameters:
+```bash
+cp config/tool_sample_config.example.ini config/tool_sample_config.ini
 ```
 
-1. **`SAVE_PCD_FILE_ASCII`**  
-   Enabling this macro definition will save PCD files in ASCII format. ASCII format is a text format where data is stored in readable form, convenient for debugging and viewing, but usually results in larger file sizes and slower read/write speeds.
+Edit `config/tool_sample_config.ini` to configure data source and PCD options.
 
-2. **`SAVE_PCD_FILE_BIN`**  
-   Enabling this macro definition will save PCD files in binary format. Binary format is more efficient than ASCII format, with smaller file sizes and faster read/write speeds, but the data is not directly readable.
+#### 1 Configure Data Source
 
-3. **`SAVE_PCD_FILE_BIN_COMPRESSED`**  
-   Enabling this macro definition may save PCD files in compressed binary format. This format further compresses data based on binary format, further reducing file size.
-
-4. **`SAVE_PLY_FILE`**  
-   After enabling this macro definition, the program may save PLY files (Polygon File Format or Stanford Triangle Format). PLY files are a file format commonly used for storing three-dimensional data.
-
-#### 2 Select Member Variables to Save
-
-Currently, besides the default saved x, y, z coordinates, six member variables are supported, controlled by the following six macros. Select the needed member variables and uncomment them:
-
-> Note: Some member variables need to be confirmed whether the lidar supports them, otherwise they will be all zeros. See additional references below for details.
-
-```cpp
-/* ------------Select the fields to be exported ------------ */
-#define ENABLE_TIMESTAMP
-#define ENABLE_RING
-#define ENABLE_INTENSITY
-// #define ENABLE_CONFIDENCE
-// #define ENABLE_WEIGHT_FACTOR
-// #define ENABLE_ENV_LIGHT
-```
-   1. **`ENABLE_TIMESTAMP`**: Point cloud timestamp
-   2. **`ENABLE_RING`**: Channel number
-   3. **`ENABLE_INTENSITY`**: Reflection intensity
-   4. **`ENABLE_CONFIDENCE`**: Confidence or other flag bits
-   5. **`ENABLE_WEIGHT_FACTOR`**: Weight factor information
-   6. **`ENABLE_ENV_LIGHT`**: Environmental light information
-
-#### 3 For parsing configuration reference, see **[How to Parse Lidar Data Online](../docs/parsing_lidar_data_online.md)** and **[How to Parse PCAP File Data Offline](../docs/parsing_pcap_file_data_offline.md)**
+For data source configuration, refer to **[How to Parse Lidar Data Online](../docs/parsing_lidar_data_online.md)** and **[How to Parse PCAP File Data Offline](../docs/parsing_pcap_file_data_offline.md)**
 
 Using PCAP parsing as an example:
 
-``` cpp
-/* -------------------Select the test mode ------------------- */
-// #define LIDAR_PARSER_TEST
-// #define SERIAL_PARSER_TEST
-#define PCAP_PARSER_TEST
-// #define EXTERNAL_INPUT_PARSER_TEST
-... ... 
+```ini
+[source_type]
+source_type = pcap
 
-#ifdef PCAP_PARSER_TEST
-  param.input_param.source_type = DATA_FROM_PCAP;                       // Set data source to offline PCAP point cloud data
-  param.input_param.pcap_path = "path/to/pcap";                         // Offline PCAP point cloud data path
-  param.input_param.correction_file_path = "/path/to/correction.csv";   // Calibration file (angle correction file), recommend using the lidar's own calibration file
-  param.input_param.firetimes_path = "path/to/firetimes.csv";           // Optional: Channel firing timing (firing moment correction file)
+[pcap]
+pcap_path = /path/to/your.pcap
+correction_file_path = /path/to/correction.csv
+firetimes_path = /path/to/firetimes.csv
 
-  param.decoder_param.pcap_play_synchronization = true;                 // Synchronize parsing according to point cloud timestamp, simulating actual lidar frequency
-  param.decoder_param.pcap_play_in_loop = false;                        // Loop parsing PCAP
-#endif
+[decoder]
+pcap_play_synchronization = true
+pcap_play_in_loop = false
 ```
+
+#### 2 Select the Required PCD Format
+
+Configure the `[pcl]` section to select output format and options:
+
+```ini
+[pcl]
+save_pcd_ascii = true              # Save PCD files in ASCII format
+save_pcd_binary = false            # Save PCD files in binary format
+save_pcd_binary_compressed = false # Save PCD files in compressed binary format
+save_ply = false                   # Save PLY files
+enable_viewer = false              # Enable visualization viewer
+pcd_ascii_precision = 16           # ASCII format data precision
+output_dir = out_pcd               # Output directory (default: out_pcd)
+output_dir_with_timestamp = false  # Add timestamp suffix to directory name (e.g., out_pcd_2026-05-31_10-12-01)
+```
+
+**Format descriptions:**
+
+1. **`save_pcd_ascii`**  
+   Saves PCD files in ASCII format. ASCII format is a text format where data is stored in readable form, convenient for debugging and viewing, but usually results in larger file sizes and slower read/write speeds.
+
+2. **`save_pcd_binary`**  
+   Saves PCD files in binary format. Binary format is more efficient than ASCII format, with smaller file sizes and faster read/write speeds, but the data is not directly readable.
+
+3. **`save_pcd_binary_compressed`**  
+   Saves PCD files in compressed binary format. This format further compresses data based on binary format, further reducing file size.
+
+4. **`save_ply`**  
+   Saves PLY files (Polygon File Format or Stanford Triangle Format). PLY files are a file format commonly used for storing three-dimensional data.
+
+#### 3 Select Member Variables to Save
+
+Currently, besides the default saved x, y, z coordinates, six member variables are supported. These are controlled by code definitions in `pcl_tool.cc`. See additional references below for details.
+
+> Note: Some member variables need to be confirmed whether the lidar supports them, otherwise they will be all zeros.
 
 ## Steps
 ### 1 Compilation
@@ -87,9 +78,9 @@ make
 ```
 
 ### 2 Run
-After successful compilation, run the generated pcl_tool executable file in the build folder. The system will have a visualization window and generate corresponding point clouds for each frame of the PCAP file in the build folder.
+After successful compilation, run the generated pcl_tool executable file in the build folder with the configuration file. The system will have a visualization window (if enabled) and generate corresponding point clouds for each frame.
 ```bash
-./pcl_tool
+./pcl_tool /path/to/tool_sample_config.ini
 ```
 
 ## Additional References
@@ -101,12 +92,10 @@ writer.writeASCII("output.pcd", cloud);
 ```
 PCD files saved using the default method have limited data precision, for example, timestamps will be represented in scientific notation.
 
-How to change PCD file data precision?
-```cpp
-pcl::PCDWriter writer;
-// you can change the value of precision to adjust the precision
-int precision = 16;
-writer.writeASCII(file_name1, *pcl_pointcloud, precision);
+How to change PCD file data precision? Set `pcd_ascii_precision` in the configuration file:
+```ini
+[pcl]
+pcd_ascii_precision = 16
 ```
 
 #### 2 How to Define Timestamp in PCD Filename
@@ -146,12 +135,12 @@ Taking the addition of member variable `addFlag` with data type `uint8_t` as an 
 
 - Navigate to file [udp1_4_parser.cc](../libhesai/UdpParser/src/udp1_4_parser.cc), search for the `ComputeXYZI` function, and call the `set_addFlag` function within it to implement assignment to `frame.points[point_index_rerank]` 
 
-#### 5 When using ENABLE_VIEWER for visualization, the program crashes
+#### 5 When using enable_viewer for visualization, the program crashes
 
 - Phenomenon
 
    ```
-   When ENABLE_VIEWER is enabled, while visualizing point cloud data, some VTK-related warnings appear, and the program directly encounters a core dumped error, causing the program to exit immediately.
+   When enable_viewer is enabled, while visualizing point cloud data, some VTK-related warnings appear, and the program directly encounters a core dumped error, causing the program to exit immediately.
 
    This issue usually occurs on Ubuntu 22.04 and above systems.
    ```
@@ -165,3 +154,7 @@ Taking the addition of member variable `addFlag` with data type `uint8_t` as an 
       vtk7.1 + pcl1.10.0
       vtk9.1 + pcl1.14.1
    ```
+
+## Configuration File Reference
+
+For complete configuration file parameters, see [tool_sample_config.example.ini](../config/tool_sample_config.example.ini)

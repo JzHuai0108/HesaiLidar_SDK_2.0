@@ -3,53 +3,78 @@ The packet loss statistics function implements real-time packet loss statistics 
 
 
 ## Preparation
-There are three methods to count the packet loss rate of lidar UDP data parsed by the SDK. This shows **Method 1**. Other methods are referenced in **Additional References**.
+
+There are three methods to count the packet loss rate of lidar UDP data parsed by the SDK.
 
 #### Method 1: Count packet loss rate and timestamp jump rate within a time period
-Navigate to [packet_loss_tool.cc](../tool/packet_loss_tool.cc)
 
-For parsing configuration reference, see **[How to Parse Lidar Data Online](../docs/parsing_lidar_data_online.md)** and **[How to Parse PCAP File Data Offline](../docs/parsing_pcap_file_data_offline.md)**
-
-You can modify the packet loss statistics time in the code as needed:
-```cpp
-float run_time = 15;  // Statistics for 15s
+Copy the example configuration file and modify the parameters:
+```bash
+cp config/sample_config.example.ini config/sample_config.ini
 ```
+
+Edit `config/sample_config.ini` to configure data source and enable packet loss detection:
+
+```ini
+[source_type]
+source_type = network
+
+[network]
+device_ip_address = 192.168.1.201
+# ... other network parameters
+
+[decoder]
+enable_packet_loss_tool = true           # Enable packet loss statistics
+enable_packet_timeloss_tool = true       # Enable timestamp jump detection
+packet_timeloss_tool_continue = false    # Continue after time loss detection
+
+[packet_loss]
+run_time = 15                            # Statistics time in seconds (must be > 0 to enable detection mode)
+```
+
+For data source configuration, refer to **[How to Parse Lidar Data Online](../docs/parsing_lidar_data_online.md)** and **[How to Parse PCAP File Data Offline](../docs/parsing_pcap_file_data_offline.md)**
 
 ## Steps
 ### 1 Compilation
 In the HesaiLidar_SDK_2.0 folder, open a terminal and execute the following commands:
 ```bash
-cd HesaiLidar_SDK_2.0/tool
-mkdir build
+cd HesaiLidar_SDK_2.0
+mkdir -p build
 cd build
 cmake ..
 make
 ```
 
 ### 2 Run
-After successful compilation, run the generated packet_loss_tool executable file in the build folder. You can add parameters to specify the runtime (s). If no runtime is specified, the default is 15s:
+After successful compilation, run the generated sample executable file in the build folder with the configuration file:
 ```bash
-./packet_loss_tool 15
+./sample /path/to/sample_config.ini
 ```
+
 Output example:
 ```log
-total recevice packet time: 15000ms  // Statistics time
-total receviced packet count: 93229  // Total packet count
-package loss: 
-total loss packet count: 0  // Total lost packet count  
-timestamp loss: 
-total loss packet count: 0  // Total timestamp jump count
+======== Packet Loss Report ========
+Statistics time: 15000 ms
+Total received packets: 93229
+Sequence loss count: 0
+Timestamp loss count: 0
+=====================================
 ```
 
 
 ## Additional References
 #### Method 2: Count total packet loss rate between two packet losses within 1s
-Navigate to [test.cc](../test/test.cc)
-```cpp
-// Enable packet loss statistics
-param.decoder_param.enable_packet_loss_tool = true; // Enable packet loss statistics function
+
+Edit the configuration file:
+```ini
+[decoder]
+enable_packet_loss_tool = true
+
+[packet_loss]
+run_time = 0                             # Set to 0 to use continuous monitoring mode
 ```
-Compilation and execution methods refer to Method 1. When packet loss occurs, the terminal will print warning information similar to the following:
+
+When packet loss occurs, the terminal will print warning information similar to the following:
 ```log
 [WARNING] pkt loss freq: 3 / 56268
 ```
@@ -92,3 +117,7 @@ Output example:
 [Frame Loss Rate]  97.47% (20241 / 20767)
 [Total Loss Rate]  2.12% (20241 / 956569)
 ```
+
+## Configuration File Reference
+
+For complete configuration file parameters, see [sample_config.example.ini](../config/sample_config.example.ini)

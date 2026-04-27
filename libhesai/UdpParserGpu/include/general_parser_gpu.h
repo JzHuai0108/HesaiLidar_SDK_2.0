@@ -102,7 +102,7 @@ class GeneralParserGpu {
   // param packet is the decoded packet; xyzi of points after computed is puted in frame  
   virtual int ComputeXYZI(LidarDecodedFrame<T_Point> &frame) = 0;
   void DoRemake(float azi_, float elev_, const RemakeConfig &remake_config, int &point_idx);
-  int IsChannelFovFilter(int fov, int channel_index, FrameDecodeParam &param);
+  int IsChannelFovFilter(float fov, int channel_index, FrameDecodeParam &param);
  protected:
   bool* get_correction_file_;
   bool* get_firetime_file_;

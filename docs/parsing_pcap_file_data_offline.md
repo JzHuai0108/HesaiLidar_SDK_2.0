@@ -1,25 +1,26 @@
 # Parsing PCAP Point Cloud Data Offline
 
 ## Preparation
-```cpp
-// Enter test.cc for PCAP related configuration
-// Use macro PCAP_PARSER_TEST, comment out the other three macros
 
-// #define LIDAR_PARSER_TEST
-// #define SERIAL_PARSER_TEST
-#define PCAP_PARSER_TEST
-// #define EXTERNAL_INPUT_PARSER_TEST
-... ...
+Copy the example configuration file and modify the parameters:
+```bash
+cp config/sample_config.example.ini config/sample_config.ini
+```
 
-#ifdef PCAP_PARSER_TEST
-  param.input_param.source_type = DATA_FROM_PCAP;                       // Set data source to offline PCAP point cloud data
-  param.input_param.pcap_path = "path/to/pcap";                         // Offline PCAP point cloud data path
-  param.input_param.correction_file_path = "/path/to/correction.csv";   // Calibration file (angle correction file), recommend using the lidar's own calibration file
-  param.input_param.firetimes_path = "path/to/firetimes.csv";           // Optional: Channel firing timing (firing moment correction file)
+Edit `config/sample_config.ini`, set `source_type = pcap` and configure the `[pcap]` section:
 
-  param.decoder_param.pcap_play_synchronization = true;                 // Synchronize parsing according to point cloud timestamp, simulating actual lidar frequency
-  param.decoder_param.pcap_play_in_loop = false;                        // Loop parsing PCAP
-#endif
+```ini
+[source_type]
+source_type = pcap
+
+[pcap]
+pcap_path = /path/to/your.pcap                   # Offline PCAP point cloud data path
+correction_file_path = /path/to/correction.csv   # Calibration file (angle correction file), recommend using the lidar's own calibration file
+firetimes_path = /path/to/firetimes.csv          # Optional: Channel firing timing (firing moment correction file)
+
+[decoder]
+pcap_play_synchronization = true                 # Synchronize parsing according to point cloud timestamp, simulating actual lidar frequency
+pcap_play_in_loop = false                        # Loop parsing PCAP
 ```
 
 ## Steps
@@ -27,6 +28,10 @@
 # 1. Build executable sample program (from build folder): After successful compilation, generate executable program
 make -j$(nproc)
 
-# 2. Execute sample program: Start parsing data
-./sample
+# 2. Execute sample program: Start parsing data (must specify configuration file)
+./sample /path/to/sample_config.ini
 ```
+
+## Additional References
+
+For complete configuration file parameters, see [sample_config.example.ini](../config/sample_config.example.ini)

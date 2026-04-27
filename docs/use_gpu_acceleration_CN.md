@@ -9,10 +9,25 @@
 
 #### 1 SDK配置
 
-请参考 **[编译宏控制](../docs/compile_macro_control_description_CN.md)** 中的操作，将宏 `FIND_CUDA` 配置为生效，运行时添加 `cuda` 参数。
+请参考 **[编译宏控制](../docs/compile_macro_control_description_CN.md)** 中的操作，将宏 `FIND_CUDA` 配置为生效。
 
-#### 2 解析配置
-参考 **[如何在线解析激光雷达数据](../docs/parsing_lidar_data_online_CN.md)** 和 **[如何离线解析PCAP文件数据](../docs/parsing_pcap_file_data_offline_CN.md)**
+#### 2 配置文件
+
+复制示例配置文件并修改参数：
+```bash
+cp config/sample_config.example.ini config/sample_config.ini
+```
+
+编辑 `config/sample_config.ini` 配置GPU选项：
+
+```ini
+[driver]
+use_gpu = true
+```
+
+或者可以在运行程序时添加 `1` 参数来启用GPU模式（见下文）。
+
+数据源配置参考 **[如何在线解析激光雷达数据](../docs/parsing_lidar_data_online_CN.md)** 和 **[如何离线解析PCAP文件数据](../docs/parsing_pcap_file_data_offline_CN.md)**
 
 ## 操作
 ### 1 编译
@@ -26,9 +41,16 @@ make
 ```
 
 ### 2 运行
-成功编译后，在build文件夹下运行生成的可执行文件。如需使用GPU解析，请添加 `cuda` 参数：
+成功编译后，在build文件夹下运行生成的可执行文件。
+
+方式1：通过配置文件启用GPU：
 ```bash
-./sample cuda
+./sample /path/to/sample_config.ini
+```
+
+方式2：通过命令行参数强制启用GPU（末尾加 `1`）：
+```bash
+./sample /path/to/sample_config.ini 1
 ```
 
 
@@ -42,4 +64,10 @@ make
 
 #### 2 代码中是否开启gpu解析的控制参数
 
-  实际使用 `DriverParam` 中的 `use_gpu` 来控制gpu解析是否开启，在 `test.cc` 的 `main` 函数中，通过赋值 `param.use_gpu` 控制gpu解析是否开启
+  实际使用 `DriverParam` 中的 `use_gpu` 来控制gpu解析是否开启。可以通过以下方式设置：
+  - 配置文件：`[driver] use_gpu = true`
+  - 命令行：运行时添加 `1` 作为第二个参数
+
+## 配置文件参考
+
+完整配置文件参数请参考 [sample_config.example.ini](../config/sample_config.example.ini)

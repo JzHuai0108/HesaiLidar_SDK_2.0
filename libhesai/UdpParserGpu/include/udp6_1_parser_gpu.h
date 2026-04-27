@@ -89,7 +89,7 @@ class Udp6_1ParserGpu: public GeneralParserGpu<T_Point>{
           continue;
         }
         block_ns_offset = XT::XT_BLOCK_NS_OFFSET2 * int((frame.block_num - blockid - 1) / 
-                        (frame.return_mode < RETURN_MODE_MULTI ? 1 : (frame.return_mode < RETURN_MODE_MULTI_TRIPLE ? 2 : 3)));
+                        (frame.return_mode < RETURN_MODE_MULTI ? 1 : (frame.return_mode != RETURN_MODE_MULTI_TRIPLE ? 2 : 3)));
         for (uint32_t channel_index = 0; channel_index < frame.laser_num; channel_index++) {
           if(this->correction_ptr->display[channel_index] == false) {
             continue;
@@ -114,9 +114,14 @@ class Udp6_1ParserGpu: public GeneralParserGpu<T_Point>{
             set_ring(ptinfo, channel_index);
             set_intensity(ptinfo, point.reserved[0]);
             set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
-            set_timeSecond(ptinfo, timestamp / kNanosecondToSecondInt);
-            set_timeNanosecond(ptinfo, timestamp % kNanosecondToSecondInt);
+            set_timeSecond_lazy(ptinfo, [timestamp]() { return timestamp / kNanosecondToSecondInt; });
+            set_timeNanosecond_lazy(ptinfo, [timestamp]() {return timestamp % kNanosecondToSecondInt; });
             set_confidence(ptinfo, point.reserved[1]);
+            set_azimuth(ptinfo, point.azimuth); 
+            set_azimuthCalib(ptinfo, azi_); 
+            set_elevation(ptinfo, this->correction_ptr->elevation[channel_index]);
+            set_elevationCalib(ptinfo, elev_); 
+            set_distance(ptinfo, point.distance); 
 
             point_num++;
           }

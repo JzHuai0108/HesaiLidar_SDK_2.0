@@ -116,7 +116,7 @@ class Udp1_4ParserGpu: public GeneralParserGpu<T_Point>{
           block_ns_offset = PandarN::OT128_BLOCK_NS_OFFSET2 * int((frame.block_num - blockid -1) / (frame.return_mode < RETURN_MODE_MULTI ? 1 : 2)) * (operator_mode == 0 ? 1 : 2);
         }
         else if (lidar_type_ == STR_OTHER) {
-          block_ns_offset = PandarN::OTHER_BLOCK_NS_OFFSET2 * int((frame.block_num - blockid -1) / (frame.return_mode < RETURN_MODE_MULTI ? 1 : 2));
+          block_ns_offset = PandarN::OTHER_BLOCK_NS_OFFSET1 + PandarN::OTHER_BLOCK_NS_OFFSET2 * int((frame.block_num - blockid -1) / (frame.return_mode < RETURN_MODE_MULTI ? 1 : 2));
         }
         else {
           if (frame.block_num == 40)
@@ -151,11 +151,16 @@ class Udp1_4ParserGpu: public GeneralParserGpu<T_Point>{
             set_ring(ptinfo, channel_index);
             set_intensity(ptinfo, point.reserved[0]);
             set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
-            set_timeSecond(ptinfo, timestamp / kNanosecondToSecondInt);
-            set_timeNanosecond(ptinfo, timestamp % kNanosecondToSecondInt);
+            set_timeSecond_lazy(ptinfo, [timestamp]() { return timestamp / kNanosecondToSecondInt; });
+            set_timeNanosecond_lazy(ptinfo, [timestamp]() {return timestamp % kNanosecondToSecondInt; });
             set_confidence(ptinfo, point.reserved[1]);
             set_weightFactor(ptinfo, point.reserved[2]);
             set_envLight(ptinfo, point.reserved[3]);
+            set_azimuth(ptinfo, point.azimuth); 
+            set_azimuthCalib(ptinfo, azi_); 
+            set_elevation(ptinfo, this->correction_ptr->elevation[channel_index]);
+            set_elevationCalib(ptinfo, elev_); 
+            set_distance(ptinfo, point.distance); 
 
             point_num++;
           }

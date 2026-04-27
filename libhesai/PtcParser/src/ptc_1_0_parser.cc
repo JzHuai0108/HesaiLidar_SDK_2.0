@@ -30,7 +30,6 @@
 using namespace hesai::lidar;
 
 Ptc_1_0_parser::Ptc_1_0_parser() {
-  CRCInit();
 }
 
 // 字节流的打包
@@ -90,7 +89,7 @@ bool Ptc_1_0_parser::SplitFileFrames(const u8Array_t &file, uint8_t u8Cmd, std::
   for(auto i = 0u; i < frames.size(); i++) {
     u8Array_t cur;
     u8Array_t vData(sizeof(BlockHeader) + frames[i].size());
-    uint32_t u32Crc = CRCCalc(&frames[i][0], frames[i].size());
+    uint32_t u32Crc = Crc32::CRCCalc(&frames[i][0], frames[i].size());
     
     BlockHeader header(0, i + 1, frames.size(), u32Crc);
     memcpy(vData.data(), &header, sizeof(BlockHeader));
@@ -103,23 +102,4 @@ bool Ptc_1_0_parser::SplitFileFrames(const u8Array_t &file, uint8_t u8Cmd, std::
     packages.push_back(vData);
   }
   return true;
-}
-
-void Ptc_1_0_parser::CRCInit() {
-  uint32_t i, j;
-
-  for (i = 0; i < 256; i++) {
-    uint32_t k = 0;
-    for (j = (i << 24) | 0x800000; j != 0x80000000; j <<= 1)
-      k = (k << 1) ^ (((k ^ j) & 0x80000000) ? 0x04c11db7 : 0);
-
-    m_CRCTable[i] = k;
-  }
-}
-
-uint32_t Ptc_1_0_parser::CRCCalc(uint8_t *bytes, int len) {
-  uint32_t i_crc = 0xffffffff;
-  for (int i = 0; i < len; i++)
-    i_crc = (i_crc << 8) ^ m_CRCTable[((i_crc >> 24) ^ bytes[i]) & 0xff];
-  return i_crc;
 }

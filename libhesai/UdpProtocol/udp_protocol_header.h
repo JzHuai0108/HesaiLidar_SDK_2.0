@@ -25,9 +25,10 @@ INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT
 TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ************************************************************************************************/
-#include "plat_utils.h"
 #ifndef LIDAR_PROTOCOL_HEADER_H
 #define LIDAR_PROTOCOL_HEADER_H
+#include "plat_utils.h"
+#include "inner_com.h"
 #ifdef _MSC_VER
 #define NOMINMAX
 #include <winsock2.h>
@@ -37,8 +38,10 @@ namespace hesai
 {
 namespace lidar
 {
-#pragma pack(push, 1)
+#define RETURN_MODE_MULTI (0x39)
+#define RETURN_MODE_MULTI_TRIPLE (0x3D)
 
+#pragma pack(push, 1)
 inline int doubleToInt(double data) {
   return static_cast<int>(data + 0.0625);
 }
@@ -95,6 +98,35 @@ struct ReservedInfo3 {
   inline uint16_t GetData() const { return little_to_native(m_u16Sts); }
 };
 
+#define CORRECTION_RAW_DATA_MAX_LENGTH 8192
+#define CORRECTION_TYPE_CSV 0
+#define CORRECTION_TYPE_DAT 1
+struct CorrectionRaw {
+  uint8_t m_rawData[CORRECTION_RAW_DATA_MAX_LENGTH];
+  uint16_t m_rawDataLen;
+  uint8_t m_type; // 0 - csv, 1 - dat
+  bool m_setFlag;
+
+  CorrectionRaw () {
+    m_type = 0;
+    m_rawDataLen = 0;
+    memset(m_rawData, 0, sizeof(m_rawData));
+    m_setFlag = false;
+  };
+  inline bool isCsv() const { return m_type == 0; }
+  inline bool isDat() const { return m_type == 1; }
+  inline void setType(uint8_t type) {m_type = type;}
+  inline bool isSet() const { return m_setFlag; }
+  inline bool setRawData(uint8_t *data, uint16_t len) {
+    if (len > CORRECTION_RAW_DATA_MAX_LENGTH) {
+      return false;
+    }
+    memcpy(m_rawData, data, len);
+    m_rawDataLen = len;
+    m_setFlag = true;
+    return true;
+  }
+};
 inline bool hasSeqNum(uint8_t status) { return status & 1; }
 inline bool hasImu(uint8_t status) { return status & 2; }
 inline bool hasFunctionSafety(uint8_t status) { return status & 4; }
