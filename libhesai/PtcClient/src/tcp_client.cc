@@ -246,7 +246,7 @@ bool TcpClient::Open() {
 
     return false;
   }
-
+  
   if (::connect(m_tcpSock, (sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
     if (EINPROGRESS != errno && EWOULDBLOCK != errno) {
       LogError("connect failed %d", errno);
@@ -284,12 +284,10 @@ int TcpClient::Send(uint8_t *u8Buf, uint16_t u16Len, int flags) {
     if (len != u16Len && errno != EAGAIN && errno != EWOULDBLOCK &&
         errno != EINTR) {
       LogError("Send errno %d", errno);
-      Close();
     }
   }
   return len;
 }
-
 int TcpClient::Receive(uint8_t *u8Buf, uint32_t u32Len, int flags) {
   int len = -1;
   bool ret = true;
@@ -298,39 +296,73 @@ int TcpClient::Receive(uint8_t *u8Buf, uint32_t u32Len, int flags) {
 
   int tick = GetMicroTickCount();
   if (ret) {
+    // 保存原始模式
+    bool needRestoreMode = false;
+#ifdef _MSC_VER
+    u_long originalMode = 0;
+    u_long newMode = 0;
+#else
+    int originalFlags = 0;
+    int newFlags = 0;
+#endif
+
+    // 如果需要设置非阻塞模式
     if (flags == 0xFF) {
-  // 设置非阻塞模式  
-#ifdef _MSC_VER  
-      u_long mode = 1; // 1为非阻塞模式  
-      ioctlsocket(m_tcpSock, FIONBIO, &mode);
-#else  
-      int flags = fcntl(m_tcpSock, F_GETFL, 0); 
-      fcntl(m_tcpSock, F_SETFL, flags | O_NONBLOCK);  
-#endif 
-    }
-    len = recv(m_tcpSock, (char*)u8Buf, u32Len, flags);
-    if (len == 0 || (len == -1 && errno != EINTR && errno != EAGAIN &&
-                     errno != EWOULDBLOCK)) {
-      if (flags != 0xFF) {
-        LogError("Receive, len: %d errno: %d", len, errno);
-        Close();
+      needRestoreMode = true;
+#ifdef _MSC_VER
+      newMode = 1; // 非阻塞模式
+      if (ioctlsocket(m_tcpSock, FIONBIO, &newMode) != 0) {
+        LogError("Failed to set non-blocking mode");
+        return -1;
       }
+#else
+      originalFlags = fcntl(m_tcpSock, F_GETFL, 0);
+      newFlags = originalFlags | O_NONBLOCK;
+      if (fcntl(m_tcpSock, F_SETFL, newFlags) != 0) {
+        LogError("Failed to set non-blocking mode");
+        return -1;
+      }
+#endif
     }
-    if (flags == 0xFF) {
-#ifdef _MSC_VER  
-      u_long mode = 0; // 0为阻塞模式  
-      ioctlsocket(m_tcpSock, FIONBIO, &mode);  
-#else  
-      flags = fcntl(m_tcpSock, F_GETFL, 0); 
-      fcntl(m_tcpSock, F_SETFL, flags & ~O_NONBLOCK); 
-#endif 
+
+    len = recv(m_tcpSock, (char*)u8Buf, u32Len, (flags == 0xFF) ? 0 : flags);
+    
+    if (len == 0) {
+      // 连接被对方关闭
+      if (flags != 0xFF) {
+        LogError("Connection closed by peer, recv returned 0");
+      }
+    } else if (len == -1) {
+      // 接收出错
+#ifdef _MSC_VER
+      int error = WSAGetLastError();
+      if (error != WSAEWOULDBLOCK && error != WSAETIMEDOUT && flags != 0xFF) {
+        LogError("Receive failed, WSA error: %d", error);
+      }
+#else
+      if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK && flags != 0xFF) {
+        LogError("Receive failed, errno: %d", errno);
+      }
+#endif
+    }
+
+    // 恢复原始模式
+    if (needRestoreMode) {
+#ifdef _MSC_VER
+      if (ioctlsocket(m_tcpSock, FIONBIO, &originalMode) != 0) {
+        LogError("Failed to restore original socket mode");
+      }
+#else
+      if (fcntl(m_tcpSock, F_SETFL, originalFlags) != 0) {
+        LogError("Failed to restore original socket mode");
+      }
+#endif
     }
   }
 
   int delta = GetMicroTickCount() - tick;
-
   if (delta >= 1000000) {
-    LogDebug("Receive execu: %dus", delta);
+    LogDebug("Receive executed: %dus", delta);
   }
 
   return len;

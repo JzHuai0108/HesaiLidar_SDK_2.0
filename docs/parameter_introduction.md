@@ -117,7 +117,6 @@ For example: "[20,30];[40,200]"This is a string configuration where each range i
 
 10. `host_ptc_port`: Specifies the source port number for PTC communication. When configured to 0, the system will randomly assign the source port number.
 
-
 #### 2.3 File Paths
 1. `pcap_path`: PCAP file path  
    *(Required for offline PCAP playback)*

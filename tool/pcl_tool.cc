@@ -1,5 +1,20 @@
 #define NOMINMAX
 #include "hesai_lidar_sdk.hpp"
+#include "../config/driver_sample_config.hpp"
+
+#include <cstring>
+#include <fstream>
+#include <string>
+#include <unordered_map>
+#include <ctime>
+#include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#define MKDIR(path) _mkdir(path)
+#else
+#define MKDIR(path) mkdir(path, 0755)
+#endif
+
 #define PCL_NO_PRECOMPILE
 #include <pcl/point_types.h>
 #include <pcl/visualization/pcl_visualizer.h>
@@ -13,21 +28,6 @@
 // #define ENABLE_CONFIDENCE
 // #define ENABLE_WEIGHT_FACTOR
 // #define ENABLE_ENV_LIGHT
-
-/* ------------Select the required file format ------------ */
-// #define SAVE_PCD_FILE_ASCII
-// #define SAVE_PCD_FILE_BIN
-// #define SAVE_PCD_FILE_BIN_COMPRESSED
-// #define SAVE_PLY_FILE
-// #define ENABLE_VIEWER
-
-/* -------------------Select the test mode ------------------- */
-// #define LIDAR_PARSER_TEST
-// #define SERIAL_PARSER_TEST
-#define PCAP_PARSER_TEST
-// #define EXTERNAL_INPUT_PARSER_TEST
-// #define LIDAR_PARSER_TCP_TEST
-
 
 #ifdef ENABLE_TIMESTAMP
   #define TIMESTAMP_PCL_STR  (double, timestamp, timestamp)
@@ -93,11 +93,30 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(
     ENV_LIGHT_PCL_STR
 )
 
+
+#ifndef SPEC_LIDAR
+using ToolPointType = PointXYZIT;
+using PclPointType = PointXYZIT;
+#endif
+
 using namespace pcl::visualization;
 std::shared_ptr<PCLVisualizer> pcl_viewer;
 std::mutex mex_viewer;
 uint32_t last_frame_time;
 uint32_t cur_frame_time;
+
+namespace {
+using PclOpts = hesai::lidar::sample_config::PclToolRuntimeOptions;
+PclOpts g_pcl_opts;
+std::string g_output_dir;
+}  // namespace
+
+
+#ifndef SPEC_LIDAR
+static bool IsValidPointXyzit(const PointXYZIT& pt) {
+  return (pt.x != 0.0f || pt.y != 0.0f || pt.z != 0.0f);
+}
+
 //log info, display frame message
 void lidarCallback(const LidarDecodedFrame<PointXYZIT>  &frame) {  
   cur_frame_time = GetMicroTickCount();
@@ -107,125 +126,143 @@ void lidarCallback(const LidarDecodedFrame<PointXYZIT>  &frame) {
   last_frame_time = cur_frame_time;
   printf("frame:%d points:%u packet:%u start time:%lf end time:%lf\n",frame.frame_index, frame.points_num, frame.packet_num, frame.frame_start_timestamp, frame.frame_end_timestamp);  
   pcl::PointCloud<PointXYZIT>::Ptr pcl_pointcloud(new pcl::PointCloud<PointXYZIT>);
-  mex_viewer.lock();
   if (frame.points_num == 0) return;
+  mex_viewer.lock();
   pcl_pointcloud->clear();
-  pcl_pointcloud->resize(frame.points_num);
-  pcl_pointcloud->points.assign(frame.points, frame.points + frame.points_num);
+  if (g_pcl_opts.save_valid_points_only) {
+    pcl_pointcloud->reserve(frame.points_num);
+    for (uint32_t i = 0; i < frame.points_num; ++i) {
+      if (IsValidPointXyzit(frame.points[i])) {
+        pcl_pointcloud->push_back(frame.points[i]);
+      }
+    }
+  } else {
+    pcl_pointcloud->resize(frame.points_num);
+    pcl_pointcloud->points.assign(frame.points, frame.points + frame.points_num);
+  }
   pcl_pointcloud->height = 1;
-  pcl_pointcloud->width = frame.points_num;
-  pcl_pointcloud->is_dense = false;
+  pcl_pointcloud->width = static_cast<uint32_t>(pcl_pointcloud->size());
+  pcl_pointcloud->is_dense = g_pcl_opts.save_valid_points_only;
 
-  std::string file_name1 = "./PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".pcd";
-  std::string file_name2 = "./PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".bin";
-  std::string file_name3 = "./PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".ply";
-  std::string file_name4 = "./PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ "_compress" + ".bin";
-//save point cloud with pcd file(ASCII) if define SAVE_PCD_FILE_ASCII.
-#ifdef SAVE_PCD_FILE_ASCII
-  pcl::PCDWriter writer;
-  // you can change the value of precision to adjust the precison
-  int precision = 16;
-  writer.writeASCII(file_name1, *pcl_pointcloud, precision);
-#endif
-//save point cloud with pcd file(BIN) if define SAVE_PCD_FILE_BIN.
-#ifdef SAVE_PCD_FILE_BIN
-  pcl::io::savePCDFileBinary(file_name2, *pcl_pointcloud);
-#endif
-// save point cloud with pcd file(binary_compress) if define SAVE_PCD_FILE_BIN_COMPRESSED
-#ifdef SAVE_PCD_FILE_BIN_COMPRESSED
-  pcl::io::savePCDFileBinaryCompressed(file_name4, *pcl_pointcloud);
-#endif
-//save point cloud with ply file if define SAVE_PLY_FILE
-#ifdef SAVE_PLY_FILE
-  pcl::PLYWriter writer1;
-  writer1.write(file_name3, *pcl_pointcloud, true);
-#endif    
-
-//display point cloud with pcl if define ENABLE_VIEWER
-#ifdef ENABLE_VIEWER   
-  PointCloudColorHandlerGenericField<PointXYZIT> point_color_handle(pcl_pointcloud, "intensity");
-  pcl_viewer->updatePointCloud<PointXYZIT>(pcl_pointcloud, point_color_handle, "pandar");
-#endif
+  std::string file_name1 = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".pcd";
+  std::string file_name2 = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ "_bin.pcd";
+  std::string file_name3 = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".ply";
+  std::string file_name4 = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ "_bin_compress" + ".pcd";
+  if (g_pcl_opts.save_pcd_ascii) {
+    pcl::PCDWriter writer;
+    writer.writeASCII(file_name1, *pcl_pointcloud, g_pcl_opts.pcd_ascii_precision);
+  }
+  if (g_pcl_opts.save_pcd_binary) {
+    pcl::io::savePCDFileBinary(file_name2, *pcl_pointcloud);
+  }
+  if (g_pcl_opts.save_pcd_binary_compressed) {
+    pcl::io::savePCDFileBinaryCompressed(file_name4, *pcl_pointcloud);
+  }
+  if (g_pcl_opts.save_ply) {
+    pcl::PLYWriter writer1;
+    writer1.write(file_name3, *pcl_pointcloud, true);
+  }
+  if (g_pcl_opts.enable_viewer) {
+    PointCloudColorHandlerGenericField<PointXYZIT> point_color_handle(pcl_pointcloud, "intensity");
+    pcl_viewer->updatePointCloud<PointXYZIT>(pcl_pointcloud, point_color_handle, "pandar");
+  }
 mex_viewer.unlock();
 }
 
-//display point cloud with pcl if define ENABLE_VIEWER
-void PclViewerInit(std::shared_ptr<PCLVisualizer>& pcl_viewer) {
+void PclViewerInitXyzit(std::shared_ptr<PCLVisualizer>& pcl_viewer) {
   pcl_viewer = std::make_shared<PCLVisualizer>("HesaiPointCloudViewer");
   pcl_viewer->setBackgroundColor(0.0, 0.0, 0.0);
   pcl_viewer->addCoordinateSystem(1.0);
   pcl::PointCloud<PointXYZIT>::Ptr pcl_pointcloud(new pcl::PointCloud<PointXYZIT>);
   pcl_viewer->addPointCloud<PointXYZIT>(pcl_pointcloud, "pandar");
   pcl_viewer->setPointCloudRenderingProperties(PCL_VISUALIZER_POINT_SIZE, 2, "pandar");
-  return;
+}
+#endif
+
+
+static void PrintUsage(const char* prog) {
+  fprintf(stderr, "Usage: %s <config.ini> [use_gpu]\n", prog);
+  fprintf(stderr, "  config.ini  - INI configuration file (required)\n");
+  fprintf(stderr, "  use_gpu     - 1 to enable GPU acceleration (optional)\n");
+  fprintf(stderr, "\nExample:\n");
+  fprintf(stderr, "  %s tool_sample_config.ini\n", prog);
+  fprintf(stderr, "  %s tool_sample_config.ini 1\n", prog);
 }
 
 int main(int argc, char *argv[])
 {
-#ifdef ENABLE_VIEWER   
-  PclViewerInit(pcl_viewer);
-#endif 
-  HesaiLidarSdk<PointXYZIT> sample;
+  HesaiLidarSdk<ToolPointType> sample;
   DriverParam param;
-  // assign param
-  param.use_gpu = (argc > 1);
-  // assign param
-#ifdef LIDAR_PARSER_TEST
-  param.input_param.source_type = DATA_FROM_LIDAR;
-  param.input_param.device_ip_address = "192.168.1.201";  // lidar ip
-  param.input_param.ptc_port = 9347; // lidar ptc port
-  param.input_param.udp_port = 2368; // point cloud destination port
-  param.input_param.multicast_ip_address = "";
 
-  param.input_param.use_ptc_connected = true;  // true: use PTC connected, false: recv correction from local file
-  param.input_param.correction_file_path = "Your correction file path";
-  param.input_param.firetimes_path = "Your firetime file path";
+  if (argc < 2) {
+    PrintUsage(argv[0]);
+    return 1;
+  }
 
-  param.input_param.host_ip_address = ""; // point cloud destination ip, local ip
-  param.input_param.fault_message_port = 9348; // fault message destination port
+  std::ifstream probe(argv[1]);
+  if (!probe.good()) {
+    fprintf(stderr, "[pcl_tool] error: config file not found: %s\n", argv[1]);
+    PrintUsage(argv[0]);
+    return 1;
+  }
+  probe.close();
 
-#elif defined (SERIAL_PARSER_TEST)
-  param.input_param.source_type = DATA_FROM_SERIAL;
-  param.input_param.rs485_com = "Your serial port name for receiving point cloud";
-  param.input_param.rs232_com = "Your serial port name for sending cmd";
-  param.input_param.point_cloud_baudrate = 3125000;
-  param.input_param.correction_file_path = "Your correction file path";
+  std::string err;
+  std::unordered_map<std::string, std::string> kv;
+  if (!hesai::lidar::sample_config::LoadIniMap(argv[1], &kv, &err)) {
+    fprintf(stderr, "[pcl_tool] config error: %s\n", err.c_str());
+    return 1;
+  }
+  if (!hesai::lidar::sample_config::PreprocessDriverSampleIniMap(&kv, &err)) {
+    fprintf(stderr, "[pcl_tool] config error: %s\n", err.c_str());
+    return 1;
+  }
+  if (!hesai::lidar::sample_config::ApplyToDriverParam(kv, "", &param, &err)) {
+    fprintf(stderr, "[pcl_tool] config error: %s\n", err.c_str());
+    return 1;
+  }
+  if (!hesai::lidar::sample_config::ApplyPclToolOptions(kv, &g_pcl_opts, &err)) {
+    fprintf(stderr, "[pcl_tool] pcl section error: %s\n", err.c_str());
+    return 1;
+  }
+  if (argc >= 3 && std::string(argv[2]) == "1") {
+    param.use_gpu = true;
+  }
+  printf("[pcl_tool] loaded config: %s\n", argv[1]);
 
-#elif defined (PCAP_PARSER_TEST)
-  param.input_param.source_type = DATA_FROM_PCAP;
-  param.input_param.pcap_path = "Your pcap file path";
-  param.input_param.correction_file_path = "Your correction file path";
-  param.input_param.firetimes_path = "Your firetime file path";
+  g_output_dir = g_pcl_opts.output_dir;
+  if (g_pcl_opts.output_dir_with_timestamp) {
+    std::time_t now = std::time(nullptr);
+    std::tm* tm_now = std::localtime(&now);
+    char time_suffix[32];
+    std::strftime(time_suffix, sizeof(time_suffix), "_%Y-%m-%d_%H-%M-%S", tm_now);
+    g_output_dir += time_suffix;
+  }
+  if (MKDIR(g_output_dir.c_str()) == 0) {
+    printf("[pcl_tool] created output directory: %s\n", g_output_dir.c_str());
+  } else {
+    struct stat st;
+    if (stat(g_output_dir.c_str(), &st) == 0 && (st.st_mode & S_IFDIR)) {
+      printf("[pcl_tool] output directory exists: %s\n", g_output_dir.c_str());
+    } else {
+      fprintf(stderr, "[pcl_tool] warning: failed to create output directory: %s\n", g_output_dir.c_str());
+    }
+  }
 
-
-  param.decoder_param.pcap_play_synchronization = true;
-  param.decoder_param.pcap_play_in_loop = false; // pcap palyback
-
-#elif defined (EXTERNAL_INPUT_PARSER_TEST)
-  param.input_param.source_type = DATA_FROM_ROS_PACKET;
-  param.input_param.correction_file_path = "Your correction file path";
-  param.input_param.firetimes_path = "Your firetime file path";
-
-#elif defined (LIDAR_PARSER_TCP_TEST)
-  param.input_param.source_type = DATA_FROM_LIDAR_TCP;
-  param.input_param.device_ip_address = "192.168.1.201";  // lidar ip
-  param.input_param.device_tcp_src_port = 5121; // lidar pointcloud tcp port
-  param.input_param.ptc_port = 9347; // lidar ptc port
-  param.input_param.use_ptc_connected = true;  // true: use PTC connected, false: recv correction from local file
-  param.input_param.correction_file_path = "Your correction file path";
-  param.input_param.firetimes_path = "Your firetime file path";
+  if (g_pcl_opts.enable_viewer) {
+#ifndef SPEC_LIDAR
+    PclViewerInitXyzit(pcl_viewer);
 #endif
+  }
 
   param.decoder_param.enable_packet_loss_tool = false;
-  param.decoder_param.socket_buffer_size = 262144000;
+  if (param.decoder_param.socket_buffer_size == 0) {
+    param.decoder_param.socket_buffer_size = 262144000;
+  }
 
-  //init lidar with param
   sample.Init(param);
-
-  //assign callback fuction
   sample.RegRecvCallback(lidarCallback);
 
-  //star process thread
   last_frame_time = GetMicroTickCount();
   sample.Start();
   if (sample.lidar_ptr_->GetInitFinish(FailInit)) {
@@ -235,12 +272,12 @@ int main(int argc, char *argv[])
 
   while (1)
   {
-#ifdef ENABLE_VIEWER   
-    mex_viewer.lock();
-    if(pcl_viewer->wasStopped()) break;
-    pcl_viewer->spinOnce();
-    mex_viewer.unlock();
-#endif     
+    if (g_pcl_opts.enable_viewer) {
+      mex_viewer.lock();
+      if (pcl_viewer->wasStopped()) break;
+      pcl_viewer->spinOnce();
+      mex_viewer.unlock();
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(40));
   }
   return 0;

@@ -157,8 +157,11 @@ bool SocketSource::Open() {
 
   if(multicast_ip_ != ""){
     struct ip_mreq mreq;                    
-    mreq.imr_multiaddr.s_addr=inet_addr(multicast_ip_.c_str());
-    mreq.imr_interface.s_addr = htonl(INADDR_ANY); 
+    mreq.imr_multiaddr.s_addr = inet_addr(multicast_ip_.c_str());
+    if (localIp_ == "")
+      mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    else
+      mreq.imr_interface.s_addr = inet_addr(localIp_.c_str());
     int ret = setsockopt(udp_sock_, IPPROTO_IP, IP_ADD_MEMBERSHIP, (const char *)&mreq, sizeof(mreq));
     if (ret < 0) {
       LogError("Multicast IP error, set correct multicast ip address or keep it empty");

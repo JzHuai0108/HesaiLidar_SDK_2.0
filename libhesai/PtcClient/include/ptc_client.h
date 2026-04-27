@@ -71,9 +71,12 @@ const uint8_t  kPTCUpgradeLidar = 0x83;
 const uint8_t  kPTCGetUpgradeLidarLog = 0x87;
 const uint8_t  kPTCGetLidarChannelConfig = 0xA8;
 const uint8_t  kPTCGetLidarFiretimes = 0xA9;
+const uint8_t  kPTCHasSubCommand = 0xFF;
 const uint32_t kPTCSetTemFpgaRegister = 0x00010031;
 const uint32_t kPTCUpgradeLidarSubCmd = 0x0000000D;
 const uint32_t kPTCGetRetroSubCmd = 0x0000011E;
+const uint32_t kPTCJT16CommandSubCmd = 0x00000138;
+const uint32_t kPTCJT16SetBaudrate = 0x00000139;
 
 typedef struct UpgradeProgress {
     int total_packets;
@@ -111,7 +114,8 @@ class PtcClient {
 
   void TcpFlushIn();
   void TryOpen();
-  int QueryCommand(u8Array_t &byteStreamIn, u8Array_t &byteStreamOut, uint8_t u8Cmd, bool isHaveHeader = false);
+  int QueryCommand(const u8Array_t &byteStreamIn, u8Array_t &byteStreamOut, const uint8_t u8Cmd, bool isHaveHeader = false);
+  int QuerySerialCommand(const u8Array_t &payload, u8Array_t &byteStreamOut, const uint8_t cmd);
   int SendCommand(u8Array_t &byteStreamIn, uint8_t u8Cmd);
   bool GetValFromOutput(uint8_t cmd, uint8_t retcode, const u8Array_t &payload, int start_pos, int length, u8Array_t &res);
 
@@ -125,13 +129,11 @@ class PtcClient {
   int SetSocketTimeout(uint32_t u32RecMillisecond, uint32_t u32SendMillisecond);
 
   int UpgradeLidar(u8Array_t &dataIn);
-  int UpgradeLidar(u8Array_t &dataIn, std::string Cmd_id, int &upgradeProgress);
+  int UpgradeLidar(u8Array_t &dataIn, std::string cmd_id, int &upgradeProgress);
   int UpgradeLidar(u8Array_t &dataIn, uint32_t cmd_id, int is_extern, int &upgrade_progress);
   void RegisterUpgradeProcessFunc(UpgradeProgressFunc_t func);
   bool RebootLidar();
-  int GetOperationLog(int module, int type, u8Array_t &dataOut);
-  int GetFreezeFrames(u8Array_t &dataOut);
-  int GetUpgradeLidarLog(u8Array_t &dataOut);
+  int DownloadLog(u8Array_t &dataIn, u8Array_t &dataOut, uint8_t cmd);
   int SetAllChannelFov(float fov[], int fov_num, int fov_model);
   int GetAllChannelFov(float fov[], int& fov_num, int& fov_model);
   /**
@@ -236,17 +238,27 @@ class PtcClient {
    */
   bool SetSpinSpeed(uint32_t speed);
 
-  void CRCInit();
-  uint32_t CRCCalc(uint8_t *bytes, int len); 
   void SetCallback(CallbackType callback) { this->log_message_handler_callback_ = callback; }
-  void ProduceLogMessage(const std::string& message); 
+  void ProduceLogMessage(const std::string& message);
+  // Serial Cmd
+  int JT16SetBaudRate(uint32_t baud_rate);
+  int JT16ChangeMode(uint8_t mode, uint8_t reserved = 0x00);
+  int JT16GetLidarVersion(u8Array_t &dataOut, uint8_t type);
+  int JT16GetCorrectionInfo(u8Array_t &dataOut);
+  int JT16GetLidarFaultState(u8Array_t &dataOut);
+  int JT16RequestUpgradeLargePackage(uint8_t type);
+  int JT16OtaQueryCommand(const uint32_t all_num, const uint32_t num, const uint32_t len, 
+    const uint8_t *payload, uint8_t &status, uint8_t &ret_code, uint8_t type);
+  int JT16UpgradeLidar(u8Array_t &data, int mode, int &upgradeProgress);
+  uint32_t point_cloud_baud_rate_ = 3125000;
+  uint32_t upgrade_baudrate_ = 115200;   
 
  public:
   void SetLidarIP(std::string);
   void SetLidarIP(uint32_t);
-  uint32_t m_CRCTable[256];       
   bool InitOpen;                       
-  int ret_code_;                
+  int ret_code_;      
+  uint8_t now_mode_ = 0;          
 
  private:
   Mutex _mutex;
@@ -267,6 +279,8 @@ class PtcClient {
   std::string ca_;
   uint32_t recv_timeout_ms_;
   uint32_t send_timeout_ms_;
+  uint32_t last_recv_timeout_ms_;
+  uint32_t last_send_timeout_ms_;
   float ptc_connect_timeout_;
   UpgradeProgressFunc_t upgradeProcessFunc;
   CallbackType log_message_handler_callback_ = nullptr;

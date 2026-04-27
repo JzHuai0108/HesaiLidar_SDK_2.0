@@ -9,10 +9,25 @@ Using GPU for point cloud parsing requires proper installation of graphics drive
 
 #### 1 SDK Configuration
 
-Please refer to the operations in **[Compile Macro Control](../docs/compile_macro_control_description.md)** to configure the macro `FIND_CUDA` to take effect, and add the `cuda` parameter when running.
+Please refer to the operations in **[Compile Macro Control](../docs/compile_macro_control_description.md)** to configure the macro `FIND_CUDA` to take effect.
 
-#### 2 Parsing Configuration
-Refer to **[How to Parse Lidar Data Online](../docs/parsing_lidar_data_online.md)** and **[How to Parse PCAP File Data Offline](../docs/parsing_pcap_file_data_offline.md)**
+#### 2 Configuration File
+
+Copy the example configuration file and modify the parameters:
+```bash
+cp config/sample_config.example.ini config/sample_config.ini
+```
+
+Edit `config/sample_config.ini` to configure GPU option:
+
+```ini
+[driver]
+use_gpu = true
+```
+
+Or you can enable GPU mode by adding a `1` parameter when running the program (see below).
+
+For data source configuration, refer to **[How to Parse Lidar Data Online](../docs/parsing_lidar_data_online.md)** and **[How to Parse PCAP File Data Offline](../docs/parsing_pcap_file_data_offline.md)**
 
 ## Steps
 ### 1 Compilation
@@ -26,9 +41,16 @@ make
 ```
 
 ### 2 Run
-After successful compilation, run the generated executable file in the build folder. To use GPU parsing, please add the `cuda` parameter:
+After successful compilation, run the generated executable file in the build folder. 
+
+Method 1: Enable GPU via configuration file:
 ```bash
-./sample cuda
+./sample /path/to/sample_config.ini
+```
+
+Method 2: Force enable GPU via command line parameter (add `1` at the end):
+```bash
+./sample /path/to/sample_config.ini 1
 ```
 
 
@@ -42,4 +64,10 @@ After successful compilation, run the generated executable file in the build fol
 
 #### 2 Control parameter for enabling GPU parsing in code
 
-  Actually use `use_gpu` in `DriverParam` to control whether GPU parsing is enabled. In the `main` function of `test.cc`, control whether GPU parsing is enabled by assigning `param.use_gpu`
+  Actually use `use_gpu` in `DriverParam` to control whether GPU parsing is enabled. You can set it via:
+  - Configuration file: `[driver] use_gpu = true`
+  - Command line: Add `1` as the second argument when running
+
+## Configuration File Reference
+
+For complete configuration file parameters, see [sample_config.example.ini](../config/sample_config.example.ini)

@@ -48,6 +48,11 @@ struct MultiplexingInfo {
   uint16_t average_energy;
 };
 
+
+
+
+
+// 4_3 begin
 struct FaultMessageInfo4_3 {
   uint8_t fault_code_type;
   uint8_t rolling_counter;
@@ -75,7 +80,9 @@ struct FaultMessageInfo4_3 {
     faultmessagePrint("lidar_high_temp_state: %d\n", high_temperture_shutdown_state);
   }
 };
+// 4_3 end
 
+// 4_7 begin
 struct FaultMessageInfo4_7 {
   uint8_t tdm_data_indicate;
   uint8_t time_division_multiplexing[14];
@@ -102,10 +109,46 @@ struct FaultMessageInfo4_7 {
             customer_id, software_version, iteration_version);
   }
 };
+// 4_7 end
+
+
+
+
+
+// 7_3 begin
+struct FaultMessageInfo7_3 {
+  uint8_t tdm_data_indicate;
+  uint8_t time_division_multiplexing[27];
+  uint8_t internal_fault_id;
+  uint8_t fault_indicate[8];
+  uint8_t software_version[3];
+  uint8_t reserved0[5];
+  uint8_t reserved3[24];
+  void Print() const {
+    faultmessagePrint("tdm_data_indicate: %d\n", tdm_data_indicate);
+    faultmessagePrint("internal_fault_id: %d\n", internal_fault_id);
+    faultmessagePrint("fault_indicate: ");
+    for (int i = 0; i < 8; i++) {
+      faultmessagePrint("%02x ", fault_indicate[i]);
+    }
+    faultmessagePrint("\n");
+    faultmessagePrint("software_version: %02x %02x %02x\n", software_version[0], software_version[1], software_version[2]);
+
+  }
+};
+// 7_3 end
+
 
 union FaultMessageUnionInfo {
+  // 4_3 begin
   FaultMessageInfo4_3 fault4_3;
+  // 4_3 end
+  // 4_7 begin
   FaultMessageInfo4_7 fault4_7;
+  // 4_7 end
+  // 7_3 begin
+  FaultMessageInfo7_3 fault7_3;
+  // 7_3 end
 };
 
 struct FaultMessageInfo {
@@ -137,12 +180,21 @@ struct FaultMessageInfo {
     faultmessagePrint("total_faultcode_num: %d, faultcode_id: %d, faultcode: 0x%08x\n", 
             total_faultcode_num, faultcode_id, faultcode);
     switch (fault_parse_version) {
+      // 4_3 begin
       case 0x0403:
         union_info.fault4_3.Print();
         break;
+      // 4_3 end
+      // 4_7 begin
       case 0x0407:
         union_info.fault4_7.Print();
         break;
+      // 4_7 end
+      // 7_3 begin
+      case 0x0703:
+        union_info.fault7_3.Print();
+        break;
+      // 7_3 end
       default:
         break;
     }

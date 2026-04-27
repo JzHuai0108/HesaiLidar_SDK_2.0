@@ -126,8 +126,8 @@ typedef struct InputParam
   int rs485_baudrate = 115200;   
   int rs232_baudrate = 9600;          
   std::string pcap_path = "Your pcap file path";  ///< Absolute path of pcap file
-  std::string correction_file_path = "Your correction file path";   ///< Path of angle calibration files(angle.csv).Only used for internal debugging.
-  std::string firetimes_path = "Your firetime file path";  ///< Path of firetime files(angle.csv).
+  std::string correction_file_path = "";   ///< Path of angle calibration files(angle.csv).Only used for internal debugging.
+  std::string firetimes_path = "";  ///< Path of firetime files(angle.csv).
   std::string dcf_file_path = "Your dcf file path";
   std::string correction_save_path = "";
   /// certFile          Represents the path of the user's certificate
@@ -155,8 +155,8 @@ typedef struct InputParam
   std::string ros_send_packet_loss_topic = NULL_TOPIC; 
   std::string ros_send_ptp_topic = NULL_TOPIC;
   std::string ros_send_correction_topic = NULL_TOPIC;
-  std::string ros_send_firetime_topic = NULL_TOPIC;
   std::string ros_send_imu_topic = NULL_TOPIC;
+  std::string ros_send_every_packet_topic = NULL_TOPIC;
 
   std::string ros_recv_correction_topic = NULL_TOPIC;
   std::string ros_recv_packet_topic = NULL_TOPIC;
