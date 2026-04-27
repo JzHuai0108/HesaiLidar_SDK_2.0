@@ -117,6 +117,11 @@ class Udp4_3ParserGpu: public GeneralParserGpu<T_Point>{
             set_intensity(ptinfo, point.reserved[0]);
             set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
             set_confidence(ptinfo, point.reserved[1]);
+            set_azimuth(ptinfo, point.azimuth); 
+            set_azimuthCalib(ptinfo, azi_); 
+            set_elevation(ptinfo, AT_correction_ptr->floatCorr.f_elevations[channel_index]);
+            set_elevationCalib(ptinfo, elev_); 
+            set_distance(ptinfo, point.distance); 
 
             point_num++;
           }

@@ -1,5 +1,58 @@
 # HesaiLidar_SDK_2.0
 
+## V2.0.12
+
+### Tuesday April 1st, 2026 16:00:00
+
+### Added
+1. Added support for FTX (protocol 7_3) parsing.
+2. Added `every_pkt_cb_` callback to receive each UDP packet with timestamp (`RegRecvCallback(const std::function<void(const UdpPacket&, double)>&)`).
+3. Added `set_xxx_lazy` macros for lazy evaluation of point cloud fields (azimuthCalib, elevation, elevationCalib).
+4. Added `LastUtcTime` struct for optimized UTC time caching.
+5. Added `Crc32` class for CRC-32 checksum calculation.
+6. Added `LidarPointXYZJT128` point struct with additional fields (confidence, weightFactor, dirtyLevel, noiseLevel, envLight).
+7. Added `LidarPointAAEEDI` point struct for azimuth/elevation/distance/intensity data.
+8. Added `AlgorithmUseData` struct for algorithm-specific data (enabled via `ALGORITHM_USE_DATA` macro).
+9. Added `FaultMessageInfo7_3` for FTX fault message parsing.
+10. Added `save_valid_points_only` configuration option in pcl_tool to filter out zero points.
+11. Added `output_dir` and `output_dir_with_timestamp` configuration options for pcl_tool and las_tool.
+12. Added INI-based configuration support for test.cc, pcl_tool.cc, las_tool.cc, and multi_test.cc.
+13. Added `config/driver_sample_config.hpp` configuration parser library.
+14. Added SDK version auto-generation via CMake (`sdk_version.hpp.in` → `sdk_version.hpp`).
+15. Added build configuration summary output in CMake.
+16. Added modular CMakeLists.txt for each libhesai submodule.
+
+### Changed
+1. Upgraded C++ standard from C++14 to C++17.
+2. Refactored `hesai_sdk_lib` from static library to INTERFACE (header-only template library).
+3. Refactored all UDP parsers from .cc/.h to header-only implementation (.h files contain full implementation).
+4. Refactored `Lidar` class from lidar.cc to header-only template in lidar.h.
+5. Refactored libhesai CMakeLists.txt into modular subdirectories (Logger, Common, UdpParser, PtcClient, Source, SerialClient, Lidar).
+6. Changed raw pointers to `std::shared_ptr` in HesaiLidarSdk for better memory management (`lidar_ptr_`, `runing_thread_ptr_`, `init_thread_ptr_`).
+7. Renamed `SHA256_USE` class to `SHA256`.
+8. Changed `channel_fov_filter` type from `std::map<int, std::vector<std::pair<int, int>>>` to `std::map<int, std::vector<std::pair<float, float>>>` for higher FOV precision.
+9. Added `use_ring_remake` field to `RemakeConfig` struct.
+10. Moved `FrameProcess()` call before point cloud compaction in SDK Run loop.
+11. Updated LICENSE file with third-party dependency licensing clarification (OpenSSL, libpcap, PCL, LASlib, CUDA).
+12. Updated README/README_CN radar model tables with additional models (Pandar40M, Pandar90E3X, OT128_40, FTX, etc.).
+13. Changed default `correction_file_path` and `firetimes_path` to empty string instead of placeholder text.
+14. Changed `ros_send_firetime_topic` to `ros_send_every_packet_topic` for per-packet ROS topic.
+15. Integrated packet loss reporting functionality directly into test.cc (removed standalone packet_loss_tool.cc).
+
+### Fixed
+1. Added `frame_decode_mutex_` mutex lock to protect frame decoding from race conditions in multi-threaded scenarios.
+2. Added warning log when CUDA parser returns error or points_num is low.
+3. Fixed early return before mutex unlock in lidarCallback when frame.points_num == 0.
+
+### Removed
+1. Removed `driver/hesai_lidar_sdk.cc` (merged into header-only implementation).
+2. Removed `libhesai/Lidar/lidar.cc` (converted to header-only template).
+3. Removed all `libhesai/UdpParser/src/*.cc` files (merged into header files).
+4. Removed `libhesai/UdpParser/udp_parser.cc` (merged into udp_parser.h).
+5. Removed `tool/packet_loss_tool.cc` (functionality merged into test.cc).
+6. Removed redundant angle correction files (PandarXT_Angle Correction File.csv, XT32M2X_Angle Correction File.csv).
+7. Removed `LidarPointRTHI` struct (replaced by `LidarPointAAEEDI`).
+
 ## V2.0.11
 
 ### Wednesday November 5th, 2025 16:30:00

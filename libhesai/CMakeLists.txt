@@ -3,230 +3,128 @@
 # ----------------------------------------#
 
 cmake_minimum_required(VERSION 3.5)
+project(CommonModules)
+
+# C++ 标准设置
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_CXX_STANDARD 14)
-project(CommonModules)
+
+# CMake 策略
 if(POLICY CMP0074)
-cmake_policy(SET CMP0074 NEW)
+    cmake_policy(SET CMP0074 NEW)
+else(POLICY CMP0074)
+    cmake_policy(SET CMP0065 NEW)
+endif(POLICY CMP0074)
+
+# ============================================
+# 构建选项
+# ============================================
+option(WITH_LIDARBOARD "Build lidar board code" ON)
+option(WITH_UDPPARSER "Build UDP parser code" ON)
+option(WITH_SERIALCLIENT "Build serial client code" ON)
+option(WITH_PTCCLIENT "Build PTC client code" ON)
+
+# 自动启用 lidar_lib
+if(WITH_LIDARBOARD AND WITH_UDPPARSER AND WITH_SERIALCLIENT AND WITH_PTCCLIENT)
+    set(WITH_LIDARLIB ON CACHE BOOL "Build lidar code" FORCE)
+endif(WITH_LIDARBOARD AND WITH_UDPPARSER AND WITH_SERIALCLIENT AND WITH_PTCCLIENT)
+
+# 内部版本选项
+
+# ============================================
+# CUDA 支持（可选）
+# 使用父级 CMakeLists.txt 设置的 CUDA_FOUND 变量
+# ============================================
+if(CUDA_FOUND)
+    set(WITH_UDPPARSERGPU ON CACHE BOOL "Build UdpParserGpu code" FORCE)
+    message(STATUS "CUDA enabled, GPU parser will be built")
 else()
-cmake_policy(SET CMP0065 NEW)
-endif()  
-
-if(FIND_CUDA)
-    find_package(CUDA )
-if(${CUDA_FOUND})
-    project(CommonModules LANGUAGES CXX CUDA)
-	set(CUDA_SOURCE_PROPERTY_FORMAT OBJ)
-	set(CUDA_SEPARABLE_COMPILATION ON)
-	include_directories(${CUDA_INCLUDE_DIRS})
-	set(CUDA_PROPAGATE_HOST_FLAGS OFF)
-    # set(CMAKE_CUDA_ARCHITECTURES "Auto")  
-	set(CUDA_NVCC_FLAGS -arch=sm_61;-O3;-G;-g;-std=c++14)#根据具体GPU性能更改算力参数
-	link_directories($ENV{CUDA_PATH}/lib/x64)
-    set(WITH_UDPPARSERGPU ON CACHE BOOL "Build UdpParserGpu code")
-else(${CUDA_FOUND})
-	MESSAGE(STATUS "cuda not found!")
-endif(${CUDA_FOUND})
+    set(WITH_UDPPARSERGPU OFF)
 endif()
 
-set(CMAKE_BUILD_TYPE ON)
-
-# Add each module's entry
-set(WITH_LIDARBOARD ON CACHE BOOL "Build lidarboard code")
-set(WITH_UDPPARSER ON CACHE BOOL "Build udp parser code")
-set(WITH_SERIALCLIENT ON CACHE BOOL "Build serial client code")
-set(WITH_PTCCLIENT ON CACHE BOOL "Build ptcClient code")
-if (WITH_LIDARBOARD AND WITH_UDPPARSER AND WITH_SERIALCLIENT AND WITH_PTCCLIENT)
-    set(WITH_LIDARLIB ON CACHE BOOL "Build lidar code")
-endif()
-
-
-# 设置生成平台为 x64
+# ============================================
+# 平台特定设置
+# ============================================
 if(MSVC)
-add_compile_options("/source-charset:utf-8")
-set(CMAKE_GENERATOR_PLATFORM x64)
-if(WITH_PTCCLIENT)
-    if(WITH_PTCS_USE)
-        set(OPENSSL_ROOT_DIR "C:/Program Files/OpenSSL-Win64")
+    add_compile_options("/source-charset:utf-8")
+    set(CMAKE_GENERATOR_PLATFORM x64)
+    if(WITH_PTCCLIENT AND WITH_PTCS_USE)
+        set(OPENSSL_ROOT_DIR "${OPENSSL_ROOT_DIR}")
         set(OPENSSL_INCLUDE_DIR ${OPENSSL_ROOT_DIR}/include)
-    endif(WITH_PTCS_USE)
-endif(WITH_PTCCLIENT)
-endif()
-include_directories("${PROJECT_BINARY_DIR}")
+    endif(WITH_PTCCLIENT AND WITH_PTCS_USE)
+endif(MSVC)
 
-if(WITH_PTCCLIENT)
-    if(WITH_PTCS_USE)
-        find_package(OpenSSL REQUIRED)
-    endif(WITH_PTCS_USE)
-endif(WITH_PTCCLIENT)
+# ============================================
+# 公共依赖
+# ============================================
+find_package(Threads REQUIRED)
 
-find_package(Threads REQUIRED)  
+# 公共头文件目录
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-include_directories(
-    ./
-)
+# ============================================
+# 按依赖顺序添加子模块
+# （被依赖的模块必须先添加）
+# ============================================
 
-# Make each module an 'OBJECT' library, can be refered to by get_link_libraries
+# 1. 基础模块（无依赖）
+message(STATUS "Adding Logger module...")
+add_subdirectory(Logger)
+
+# 2. 通用工具（依赖 Logger）
+message(STATUS "Adding Common module...")
+add_subdirectory(Common)
+
+# 3. UDP 解析器（依赖 Common）
 if(WITH_UDPPARSER)
-    add_library(udpParser_lib 
-        UdpParser/udp_parser.cc
-        )
-    target_link_libraries(udpParser_lib
-                        log_lib
-                        platutils_lib)
-    set_target_properties(udpParser_lib 
-        PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 14)
-    target_include_directories(udpParser_lib PUBLIC   
-        UdpProtocol
-        UdpParser/include
-        UdpParser/src
-        UdpParser
-        ./
-        ../algorithm
-    ) 
-    if(WITH_UDPPARSERGPU)
-        add_library(udpParserGpu_lib 
-            UdpParserGpu/udp_parser_gpu.cu
-            UdpParserGpu/src/general_parser_gpu.cu
-            UdpParserGpu/src/udp_p40_parser_gpu.cu
-            UdpParserGpu/src/udp_p64_parser_gpu.cu
-            UdpParserGpu/src/udp1_4_parser_gpu.cu
-            UdpParserGpu/src/udp1_8_parser_gpu.cu
-            UdpParserGpu/src/udp3_1_parser_gpu.cu
-            UdpParserGpu/src/udp3_2_parser_gpu.cu
-            UdpParserGpu/src/udp4_3_parser_gpu.cu
-            UdpParserGpu/src/udp4_7_parser_gpu.cu
-            UdpParserGpu/src/udp6_1_parser_gpu.cu
-            UdpParserGpu/src/udp7_2_parser_gpu.cu
-            )
-        target_link_libraries(udpParserGpu_lib
-            udpParser_lib)
-        target_include_directories(udpParserGpu_lib PUBLIC   
-            UdpParserGpu/include
-            UdpParserGpu/src
-            UdpParserGpu)
-    endif(WITH_UDPPARSERGPU)
+    message(STATUS "Adding UdpParser module...")
+    add_subdirectory(UdpParser)
+    
+    # GPU 解析器（依赖 UdpParser + CUDA）
+    if(WITH_UDPPARSERGPU AND CUDA_FOUND)
+        message(STATUS "Adding UdpParserGpu module...")
+        add_subdirectory(UdpParserGpu)
+    endif(WITH_UDPPARSERGPU AND CUDA_FOUND)
 endif(WITH_UDPPARSER)
 
-
-
+# 4. PTC 客户端（依赖 Common）
 if(WITH_PTCCLIENT)
-if(WITH_PTCS_USE)
-    set(SSL_SOURCE PtcClient/src/tcp_ssl_client.cc)
-else()
-    set(SSL_SOURCE "")
-endif()
-    add_library(ptcClient_lib 
-        PtcClient/src/ptc_client.cc
-        PtcClient/src/tcp_client.cc
-        PtcParser/src/general_ptc_parser.cc
-        PtcParser/src/ptc_1_0_parser.cc
-        PtcParser/src/ptc_2_0_parser.cc
-        PtcParser/ptc_parser.cc
-        ${SSL_SOURCE})
-    target_link_libraries(ptcClient_lib
-                        platutils_lib)
-    if(WITH_PTCS_USE)
-        target_link_libraries(ptcClient_lib
-            ${OPENSSL_LIBRARIES})
-    endif(WITH_PTCS_USE)
-    set_target_properties(ptcClient_lib 
-        PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 14)
-    target_include_directories(ptcClient_lib PUBLIC   
-        PtcClient/include
-        PtcParser/include
-        PtcParser) 
-    if(WITH_PTCS_USE)
-        target_include_directories(ptcClient_lib PUBLIC   
-            ${OPENSSL_INCLUDE_DIR})
-        target_compile_definitions(ptcClient_lib PUBLIC WITH_PTCS_USE=1)
-    endif(WITH_PTCS_USE)
-    
+    message(STATUS "Adding PtcClient module...")
+    add_subdirectory(PtcClient)
 endif(WITH_PTCCLIENT)
 
-if(WITH_LIDARBOARD)
-    add_library(source_lib 
-        Source/src/source.cc
-        Source/src/socket_source.cc
-        Source/src/pcap_source.cc
-        Source/src/serial_source.cc
-        Source/src/pcap_saver.cc
-        Source/src/tcp_source.cc
-        )
-    target_link_libraries(source_lib
-        platutils_lib)
-    set_target_properties(source_lib
-        PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 14)
-    target_include_directories(source_lib PUBLIC   
-        Source/include
-        Container/include
-        Container/src
-    ) 
+# 5. SomeIP 客户端（依赖 Common，可选）
 
-    if (WITH_SERIALCLIENT)
-        add_library(serialClient_lib 
-            SerialClient/src/serial_client.cc)
-        target_link_libraries(serialClient_lib
-            source_lib)
-        set_target_properties(serialClient_lib 
-            PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 14)  
-        target_include_directories(serialClient_lib PUBLIC   
-            SerialClient/include
-        ) 
+# 6. 数据源模块（依赖 Common）
+if(WITH_LIDARBOARD)
+    message(STATUS "Adding Source module...")
+    add_subdirectory(Source)
+    
+    # 串口客户端（依赖 Source）
+    if(WITH_SERIALCLIENT)
+        message(STATUS "Adding SerialClient module...")
+        add_subdirectory(SerialClient)
     endif(WITH_SERIALCLIENT)
 endif(WITH_LIDARBOARD)
 
-# platutils lib
-add_library(platutils_lib 
-    Common/src/plat_utils.cc
-    Common/src/auto_tick_count.cc)
-target_link_libraries(platutils_lib
-    log_lib)
-set_target_properties(platutils_lib
-    PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 14)
-target_include_directories(platutils_lib PUBLIC   
-    Common/include
-)
-# log lib
-if(BUILD_LOG_LIB_SHARED)
-    add_library(log_lib SHARED
-        Logger/src/logger.cc)
-    target_compile_definitions(log_lib PRIVATE LOG_LIB_API_EXPORTS=1 BUILD_LOG_LIB_SHARED=1)
-else()
-    add_library(log_lib
-        Logger/src/logger.cc)
-endif()
-target_link_libraries(log_lib
-    ${CMAKE_THREAD_LIBS_INIT})
-set_target_properties(log_lib
-    PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 14)
-target_include_directories(log_lib PUBLIC   
-    Logger/include
-)
 
-if (WITH_LIDARLIB)
-    add_library(lidar_lib 
-        Lidar/lidar.cc)
-    target_link_libraries(lidar_lib
-        log_lib
-        platutils_lib
-        udpParser_lib
-        ptcClient_lib
-        source_lib
-        serialClient_lib
-        ${CMAKE_THREAD_LIBS_INIT})
-    if(WITH_UDPPARSERGPU)
-        target_link_libraries(lidar_lib
-            udpParserGpu_lib)
-    endif(WITH_UDPPARSERGPU)
-    set_target_properties(lidar_lib
-        PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 14)
-    target_include_directories(lidar_lib PUBLIC   
-        Lidar
-        ./
-    )
-    
-    
+if(WITH_LIDARLIB)
+    message(STATUS "Adding Lidar module...")
+    add_subdirectory(Lidar)
 endif(WITH_LIDARLIB)
 
+# ============================================
+# 构建信息摘要
+# ============================================
+message(STATUS "")
+message(STATUS "=== Build Configuration ===")
+message(STATUS "  WITH_LIDARBOARD:    ${WITH_LIDARBOARD}")
+message(STATUS "  WITH_UDPPARSER:     ${WITH_UDPPARSER}")
+message(STATUS "  WITH_UDPPARSERGPU:  ${WITH_UDPPARSERGPU}")
+message(STATUS "  WITH_PTCCLIENT:     ${WITH_PTCCLIENT}")
+message(STATUS "  WITH_PTCS_USE:      ${WITH_PTCS_USE}")
+message(STATUS "  WITH_SERIALCLIENT:  ${WITH_SERIALCLIENT}")
+message(STATUS "  WITH_LIDARLIB:      ${WITH_LIDARLIB}")
+message(STATUS "===========================")
+message(STATUS "")

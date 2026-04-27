@@ -168,6 +168,20 @@ struct LidarOpticalCenter {
   LidarOpticalCenter& operator=(LidarOpticalCenter&) = delete;  
 };
 
+struct LastUtcTime {
+  uint64_t last_time = 0;
+  int16_t last_utc[6];
+  LastUtcTime() {
+    last_time = 0;
+    last_utc[0] = -1;
+    last_utc[1] = -1;
+    last_utc[2] = -1;
+    last_utc[3] = -1;
+    last_utc[4] = -1;
+    last_utc[5] = -1;
+  }
+};
+
 #pragma pack(push, 1)
 
 
@@ -202,17 +216,42 @@ struct PacketDecodeData {
 struct LidarDecodeConfig {
     int fov_start;
     int fov_end;
-    std::map<int, std::vector<std::pair<int, int>>> channel_fov_filter;
-    std::vector<std::pair<int, int>> multi_fov_filter_ranges;
+    std::map<int, std::vector<std::pair<float, float>>> channel_fov_filter;
+    std::vector<std::pair<float, float>> multi_fov_filter_ranges;
     LidarDecodeConfig() {
       fov_start = -1;
       fov_end = -1;
     }
 };
 
-class SHA256_USE {  
+class Crc32 {
+public:
+  static uint32_t CRCCalc(const uint8_t *bytes, int len, int zeros_num = 0) {
+    static uint32_t crc_table[256];
+    static bool initialized = false;
+    if (!initialized) {
+      uint32_t i, j;
+      for (i = 0; i < 256; i++) {
+        uint32_t k = 0;
+        for (j = (i << 24) | 0x800000; j != 0x80000000; j <<= 1)
+          k = (k << 1) ^ (((k ^ j) & 0x80000000) ? 0x04c11db7 : 0);
+        crc_table[i] = k;
+      }
+    }
+
+    uint32_t i_crc = 0xffffffff;
+    int i = 0;
+    for (i = 0; i < len; i++)
+      i_crc = (i_crc << 8) ^ crc_table[((i_crc >> 24) ^ bytes[i]) & 0xff];
+    for (i = 0; i < zeros_num; i++)
+      i_crc = (i_crc << 8) ^ crc_table[((i_crc >> 24) ^ 0) & 0xff];
+    return i_crc;
+  }
+};
+
+class SHA256 {  
 public:  
-    SHA256_USE() {  
+    SHA256() {  
         // Initialize the hash values  
         state = {{  
             0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,  

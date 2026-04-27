@@ -110,12 +110,29 @@ struct LidarPointXYZICWERT
     double timestamp;  
 };
 
-struct LidarPointRTHI
+struct LidarPointXYZJT128
 {
-    int theta; 
-    int phi;               
-    int radius;            
-    int intensity;         
+    float x; 
+    float y;             
+    float z;             
+    uint8_t intensity;  
+    uint8_t confidence;  
+    uint8_t weightFactor;
+    uint8_t dirtyLevel;
+    uint8_t noiseLevel;
+    uint8_t envLight;
+    uint16_t ring;
+    double timestamp;  
+};
+
+struct LidarPointAAEEDI
+{
+  float azimuth;
+  float azimuthCalib;
+  float elevation;
+  float elevationCalib;
+  float distance;
+  uint8_t intensity;    
 };
 #pragma pack(pop)
 
@@ -149,6 +166,16 @@ struct LidarImuData {
   }
 };
 
+
+
+#ifdef ALGORITHM_USE_DATA
+struct AlgorithmUseData {
+  float azimuth;
+  float elevation;
+  float distance;
+  uint8_t reserved[4];
+};
+#endif // ALGORITHM_USE_DATA
 struct FrameDecodeParam {
   bool pcap_time_synchronization; 
   bool firetimes_flag;
@@ -223,7 +250,7 @@ struct FrameDecodeParam {
     }
   }
 
-  int ParseChannelFovFilterPath(std::string file, std::map<int, std::vector<std::pair<int, int>>>& channel_fov_filter) {
+  int ParseChannelFovFilterPath(std::string file, std::map<int, std::vector<std::pair<float, float>>>& channel_fov_filter) {
     if (file == "") return -1;
     if (!std::ifstream(file).good()) {
       LogError("channel fov file does not exist: %s", file.c_str());
@@ -245,7 +272,7 @@ struct FrameDecodeParam {
       int channel = std::stoi(line.substr(0, colon_pos));
       std::string ranges_str = line.substr(colon_pos + 1);
 
-      std::vector<std::pair<int, int>> ranges;
+      std::vector<std::pair<float, float>> ranges;
       size_t start = 0;
       size_t end = ranges_str.find(';');
 
@@ -256,8 +283,8 @@ struct FrameDecodeParam {
         size_t bracket_close = range_part.find(']');
 
         if (bracket_open != std::string::npos && comma != std::string::npos && bracket_close != std::string::npos) {
-          int low = std::stoi(range_part.substr(bracket_open + 1, comma - bracket_open - 1));
-          int high = std::stoi(range_part.substr(comma + 1, bracket_close - comma - 1));
+          int low = std::stof(range_part.substr(bracket_open + 1, comma - bracket_open - 1));
+          int high = std::stof(range_part.substr(comma + 1, bracket_close - comma - 1));
           ranges.emplace_back(low, high);
         }
 
@@ -272,8 +299,8 @@ struct FrameDecodeParam {
       size_t bracket_close = range_part.find(']');
 
       if (bracket_open != std::string::npos && comma != std::string::npos && bracket_close != std::string::npos) {
-        int low = std::stoi(range_part.substr(bracket_open + 1, comma - bracket_open - 1));
-        int high = std::stoi(range_part.substr(comma + 1, bracket_close - comma - 1));
+        float low = std::stof(range_part.substr(bracket_open + 1, comma - bracket_open - 1));
+        float high = std::stof(range_part.substr(comma + 1, bracket_close - comma - 1));
         ranges.emplace_back(low, high);
       }
 
@@ -284,7 +311,7 @@ struct FrameDecodeParam {
     //遍历打印channel_fov_filter
     for (const auto& entry : channel_fov_filter) {
       int channel = entry.first;
-      const std::vector<std::pair<int, int>>& ranges = entry.second;
+      const std::vector<std::pair<float, float>>& ranges = entry.second;
 
       std::string channel_info = "Channel: " + std::to_string(channel) + ", Ranges: ";
       for (const auto& range : ranges) {
@@ -294,7 +321,7 @@ struct FrameDecodeParam {
     }
     return 0;
   }
-  int ParseMultiFovFilterRanges(std::string ranges_str, std::vector<std::pair<int, int>>& ranges) {
+  int ParseMultiFovFilterRanges(std::string ranges_str, std::vector<std::pair<float, float>>& ranges) {
     if (ranges_str == "") return -1;
     size_t start = 0;
     size_t end = ranges_str.find(';');
@@ -306,8 +333,8 @@ struct FrameDecodeParam {
       size_t bracket_close = range_part.find(']');
 
       if (bracket_open != std::string::npos && comma != std::string::npos && bracket_close != std::string::npos) {
-        int low = std::stoi(range_part.substr(bracket_open + 1, comma - bracket_open - 1));
-        int high = std::stoi(range_part.substr(comma + 1, bracket_close - comma - 1));
+        float low = std::stof(range_part.substr(bracket_open + 1, comma - bracket_open - 1));
+        float high = std::stof(range_part.substr(comma + 1, bracket_close - comma - 1));
         ranges.emplace_back(low, high);
       }
 
@@ -322,8 +349,8 @@ struct FrameDecodeParam {
     size_t bracket_close = range_part.find(']');
 
     if (bracket_open != std::string::npos && comma != std::string::npos && bracket_close != std::string::npos) {
-      int low = std::stoi(range_part.substr(bracket_open + 1, comma - bracket_open - 1));
-      int high = std::stoi(range_part.substr(comma + 1, bracket_close - comma - 1));
+      float low = std::stof(range_part.substr(bracket_open + 1, comma - bracket_open - 1));
+      float high = std::stof(range_part.substr(comma + 1, bracket_close - comma - 1));
       ranges.emplace_back(low, high);
     }
     
@@ -433,13 +460,17 @@ class LidarDecodedFrame
     LidarDecodedFrame(const LidarDecodedFrame&) = delete;
     LidarDecodedFrame& operator=(const LidarDecodedFrame&) = delete;
     void Update() {
-        packet_num = 0;
-        points_num = 0;
-        frame_start_timestamp = 0;
-        frame_end_timestamp = 0;
-        scan_complete = false;
-        frame_index++;
-        std::fill(et_echo_vec.begin(), et_echo_vec.end(), false);
+      packet_num = 0;
+      points_num = 0;
+      frame_start_timestamp = 0;
+      frame_end_timestamp = 0;
+      scan_complete = false;
+      frame_index++;
+#ifdef ALGORITHM_USE_DATA
+      if (!algorithm_data_vec.empty()) {
+        memset(algorithm_data_vec.data(), 0, sizeof(AlgorithmUseData) * algorithm_data_vec.size());
+      }
+#endif // ALGORITHM_USE_DATA
     }
     void clearFuncSafety() {
       memset(funcSafety, 0, sizeof(FunctionSafety) * maxPacketPerFrame);
@@ -490,8 +521,11 @@ class LidarDecodedFrame
     bool frame_init_ = false;
     uint32_t point_cloud_size = 0;
     uint8_t* point_cloud_raw_data = nullptr;
-    std::vector<bool> et_echo_vec;
     bool clear_every_frame = false;
+#ifdef ALGORITHM_USE_DATA
+    bool algorithm_data_vec_use = false;
+    std::vector<AlgorithmUseData> algorithm_data_vec; 
+#endif // ALGORITHM_USE_DATA
     uint8_t *multi_frame_buffer = nullptr;
     PointT* multi_points = nullptr;
     uint32_t multi_packet_num = 0;

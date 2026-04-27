@@ -99,6 +99,12 @@ class Udp1_8ParserGpu: public GeneralParserGpu<T_Point>{
           if (frame.fParam.dirty_mapping_reflectance) {
             set_intensity(ptinfo, point.reserved[1] * 64);
           }
+          set_azimuth(ptinfo, point.azimuth); 
+          set_azimuthCalib(ptinfo, azi_); 
+          set_elevation(ptinfo, this->correction_ptr->elevation[channel_index]);
+          set_elevationCalib(ptinfo, elev_); 
+          set_distance(ptinfo, point.distance); 
+
           point_num++;
         }
       }
