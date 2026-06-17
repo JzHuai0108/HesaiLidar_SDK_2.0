@@ -85,7 +85,25 @@ if(PCL_FOUND)
         hesai_sdk_lib
         ${PCL_LIBRARIES}
     )
-    message(STATUS "PCL found, pcl_tool will be built")
+
+    add_executable(pcl_tool_crtt
+        pcl_tool_crtt.cc
+    )
+
+    target_include_directories(pcl_tool_crtt PRIVATE
+        ${PCL_INCLUDE_DIRS}
+    )
+
+    target_link_directories(pcl_tool_crtt PRIVATE
+        ${PCL_LIBRARY_DIRS}
+    )
+
+    target_link_libraries(pcl_tool_crtt PRIVATE
+        hesai_sdk_lib
+        ${PCL_LIBRARIES}
+    )
+
+    message(STATUS "PCL found, pcl_tool and pcl_tool_crtt will be built")
 else()
     message(STATUS "PCL not found, pcl_tool will be skipped")
     message(STATUS "  Debian/Ubuntu: sudo apt install libpcl-dev")

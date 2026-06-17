@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include "hesai_lidar_sdk.hpp"
 #include "../config/driver_sample_config.hpp"
+#include "pcl_tool_args.hpp"
 
 #include <cstring>
 #include <cstdint>
@@ -38,7 +39,7 @@
   #define RING_PCL_STR
 #endif
 #ifdef ENABLE_INTENSITY
-  #define INTENSITY_PCL_STR  (std::uint8_t, intensity, intensity)
+  #define INTENSITY_PCL_STR  (float, intensity, intensity)
 #else
   #define INTENSITY_PCL_STR
 #endif
@@ -58,20 +59,20 @@
   #define ENV_LIGHT_PCL_STR
 #endif
 #ifdef ENABLE_TIMESTAMP
-  #define TIMESTAMP_SEC_NSEC_PCL_STR  (std::uint64_t, time_sec, time_sec)(std::uint32_t, time_nsec, time_nsec)
+  #define TIMESTAMP_SEC_NSEC_PCL_STR  (std::uint32_t, time_sec, time_sec)(std::uint32_t, time_nsec, time_nsec)
 #else
   #define TIMESTAMP_SEC_NSEC_PCL_STR
 #endif
 struct PointXYZIT {
   PCL_ADD_POINT4D   
 #ifdef ENABLE_INTENSITY
-  uint8_t intensity;
+  float intensity;
 #endif
 #ifdef ENABLE_RING
   uint16_t ring;
 #endif
 #ifdef ENABLE_TIMESTAMP
-  uint64_t time_sec;
+  uint32_t time_sec;
   uint32_t time_nsec;
 #endif
 #ifdef ENABLE_CONFIDENCE
@@ -111,112 +112,10 @@ uint32_t cur_frame_time;
 
 namespace {
 using PclOpts = hesai::lidar::sample_config::PclToolRuntimeOptions;
+using CliOverrides = hesai::lidar::sample_config::PclToolCliOverrides;
 PclOpts g_pcl_opts;
 std::string g_output_dir;
 }  // namespace
-
-static inline std::string FormatTimestampSecNsec(double timestamp) {
-  if (timestamp < 0.0) timestamp = 0.0;
-  const double sec_part = std::floor(timestamp);
-  uint64_t sec = static_cast<uint64_t>(sec_part);
-  uint32_t nsec = static_cast<uint32_t>(std::llround((timestamp - sec_part) * 1000000000.0));
-  if (nsec >= 1000000000U) {
-    ++sec;
-    nsec -= 1000000000U;
-  }
-
-  char buf[32];
-  std::snprintf(buf, sizeof(buf), "%llu.%09u",
-                static_cast<unsigned long long>(sec), nsec);
-  return std::string(buf);
-}
-
-struct CliOverrides {
-  bool use_gpu = false;
-  std::string pcap_path;
-  std::string correction_file_path;
-  std::string firetimes_path;
-  std::string output_dir;
-};
-
-static bool ReadArgValue(int argc, char* argv[], int* i, std::string* value) {
-  const std::string arg(argv[*i]);
-  const size_t eq = arg.find('=');
-  if (eq != std::string::npos) {
-    *value = arg.substr(eq + 1);
-    return true;
-  }
-  if (*i + 1 >= argc) {
-    return false;
-  }
-  *value = argv[++(*i)];
-  return true;
-}
-
-static bool ParseCliOverrides(int argc, char* argv[], CliOverrides* overrides, std::string* err) {
-  for (int i = 2; i < argc; ++i) {
-    const std::string arg(argv[i]);
-    if (arg == "1") {
-      overrides->use_gpu = true;
-      continue;
-    }
-
-    std::string value;
-    if (arg == "--use_gpu" || arg == "--use-gpu" || arg.rfind("--use_gpu=", 0) == 0 ||
-        arg.rfind("--use-gpu=", 0) == 0) {
-      const size_t eq = arg.find('=');
-      if (eq != std::string::npos) {
-        value = arg.substr(eq + 1);
-        bool parsed = false;
-        if (!hesai::lidar::sample_config::ParseBool(value, &parsed)) {
-          if (err) *err = "invalid --use_gpu value: " + value;
-          return false;
-        }
-        overrides->use_gpu = parsed;
-      } else if (i + 1 < argc && argv[i + 1][0] != '-') {
-        value = argv[++i];
-        bool parsed = false;
-        if (!hesai::lidar::sample_config::ParseBool(value, &parsed)) {
-          if (err) *err = "invalid --use_gpu value: " + value;
-          return false;
-        }
-        overrides->use_gpu = parsed;
-      } else {
-        overrides->use_gpu = true;
-      }
-    } else if (arg == "--pcap_path" || arg == "--pcap-path" || arg.rfind("--pcap_path=", 0) == 0 ||
-               arg.rfind("--pcap-path=", 0) == 0) {
-      if (!ReadArgValue(argc, argv, &i, &overrides->pcap_path)) {
-        if (err) *err = "missing value for --pcap_path";
-        return false;
-      }
-    } else if (arg == "--correction_file_path" || arg == "--correction-file-path" ||
-               arg.rfind("--correction_file_path=", 0) == 0 || arg.rfind("--correction-file-path=", 0) == 0) {
-      if (!ReadArgValue(argc, argv, &i, &overrides->correction_file_path)) {
-        if (err) *err = "missing value for --correction_file_path";
-        return false;
-      }
-    } else if (arg == "--firetimes_path" || arg == "--firetimes-path" || arg == "--frretimes_path" ||
-               arg.rfind("--firetimes_path=", 0) == 0 || arg.rfind("--firetimes-path=", 0) == 0 ||
-               arg.rfind("--frretimes_path=", 0) == 0) {
-      if (!ReadArgValue(argc, argv, &i, &overrides->firetimes_path)) {
-        if (err) *err = "missing value for --firetimes_path";
-        return false;
-      }
-    } else if (arg == "--output_dir" || arg == "--output-dir" || arg.rfind("--output_dir=", 0) == 0 ||
-               arg.rfind("--output-dir=", 0) == 0) {
-      if (!ReadArgValue(argc, argv, &i, &overrides->output_dir)) {
-        if (err) *err = "missing value for --output_dir";
-        return false;
-      }
-    } else {
-      if (err) *err = "unknown argument: " + arg;
-      return false;
-    }
-  }
-  return true;
-}
-
 
 #ifndef SPEC_LIDAR
 static bool IsValidPointXyzit(const ToolPointType& pt) {
@@ -229,13 +128,13 @@ static inline PointXYZIT ToPclPointXyzit(const ToolPointType& src) {
   dst.y = src.y;
   dst.z = src.z;
 #ifdef ENABLE_INTENSITY
-  dst.intensity = src.intensity;
+  dst.intensity = static_cast<float>(src.intensity);
 #endif
 #ifdef ENABLE_RING
   dst.ring = src.ring;
 #endif
 #ifdef ENABLE_TIMESTAMP
-  dst.time_sec = src.timeSecond;
+  dst.time_sec = static_cast<uint32_t>(src.timeSecond);
   dst.time_nsec = src.timeNanosecond;
 #endif
 #ifdef ENABLE_CONFIDENCE
@@ -273,12 +172,11 @@ void lidarCallback(const LidarDecodedFrame<ToolPointType>  &frame) {
   pcl_pointcloud->width = static_cast<uint32_t>(pcl_pointcloud->size());
   pcl_pointcloud->is_dense = g_pcl_opts.save_valid_points_only;
   
-  const std::string timestamp = FormatTimestampSecNsec(frame.frame_start_timestamp);
+  const std::string timestamp = hesai::lidar::sample_config::FormatFrameTimestampSecNsec(frame.frame_start_timestamp);
   const std::string file_name_pcd_ascii = g_output_dir + "/" + timestamp + ".pcd";
-  const std::string file_name_pcd_binary = g_output_dir + "/" + timestamp +
-                                           (g_pcl_opts.save_pcd_ascii ? "_bin.pcd" : ".pcd");
+  const std::string file_name_pcd_binary = g_output_dir + "/" + timestamp + ".pcd";
   const std::string file_name_ply = g_output_dir + "/" + timestamp + ".ply";
-  const std::string file_name_pcd_compressed = g_output_dir + "/" + timestamp + "_bin_compress.pcd";
+  const std::string file_name_pcd_compressed = g_output_dir + "/" + timestamp + ".pcd";
   if (g_pcl_opts.save_pcd_ascii) {
     pcl::PCDWriter writer;
     writer.writeASCII(file_name_pcd_ascii, *pcl_pointcloud, g_pcl_opts.pcd_ascii_precision);
@@ -312,19 +210,7 @@ void PclViewerInitXyzit(std::shared_ptr<PCLVisualizer>& pcl_viewer) {
 
 
 static void PrintUsage(const char* prog) {
-  fprintf(stderr, "Usage: %s <config.ini> [1] [options]\n", prog);
-  fprintf(stderr, "  config.ini                - INI configuration file (required)\n");
-  fprintf(stderr, "  1                         - enable GPU acceleration (optional, legacy)\n");
-  fprintf(stderr, "  --use_gpu [true|false]    - override GPU acceleration\n");
-  fprintf(stderr, "  --pcap_path <path>        - override input.pcap_path\n");
-  fprintf(stderr, "  --correction_file_path <path>\n");
-  fprintf(stderr, "                            - override input.correction_file_path\n");
-  fprintf(stderr, "  --firetimes_path <path>   - override input.firetimes_path\n");
-  fprintf(stderr, "  --output_dir <path>       - override pcl.output_dir\n");
-  fprintf(stderr, "\nExample:\n");
-  fprintf(stderr, "  %s tool_sample_config.ini\n", prog);
-  fprintf(stderr, "  %s tool_sample_config.ini 1\n", prog);
-  fprintf(stderr, "  %s tool_sample_config.ini --pcap_path data.pcap --correction_file_path correction.csv --output_dir out_pcd\n", prog);
+  hesai::lidar::sample_config::PrintPclToolUsage(prog);
 }
 
 int main(int argc, char *argv[])
@@ -347,7 +233,7 @@ int main(int argc, char *argv[])
 
   std::string err;
   CliOverrides cli_overrides;
-  if (!ParseCliOverrides(argc, argv, &cli_overrides, &err)) {
+  if (!hesai::lidar::sample_config::ParsePclToolCliOverrides(argc, argv, &cli_overrides, &err)) {
     fprintf(stderr, "[pcl_tool] argument error: %s\n", err.c_str());
     PrintUsage(argv[0]);
     return 1;

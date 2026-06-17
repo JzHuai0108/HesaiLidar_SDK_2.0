@@ -1,7 +1,11 @@
 #define NOMINMAX
 #include "hesai_lidar_sdk.hpp"
 #include "../config/driver_sample_config.hpp"
+#include "pcl_tool_args.hpp"
 
+#include <cmath>
+#include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <string>
@@ -29,18 +33,13 @@
 // #define ENABLE_WEIGHT_FACTOR
 // #define ENABLE_ENV_LIGHT
 
-#ifdef ENABLE_TIMESTAMP
-  #define TIMESTAMP_PCL_STR  (double, timestamp, timestamp)
-#else
-  #define TIMESTAMP_PCL_STR
-#endif
 #ifdef ENABLE_RING
   #define RING_PCL_STR  (std::uint16_t, ring, ring)
 #else
   #define RING_PCL_STR
 #endif
 #ifdef ENABLE_INTENSITY
-  #define INTENSITY_PCL_STR  (std::uint8_t, intensity, intensity)
+  #define INTENSITY_PCL_STR  (float, intensity, intensity)
 #else
   #define INTENSITY_PCL_STR
 #endif
@@ -59,16 +58,22 @@
 #else
   #define ENV_LIGHT_PCL_STR
 #endif
+#ifdef ENABLE_TIMESTAMP
+  #define TIMESTAMP_SEC_NSEC_PCL_STR  (std::uint32_t, time_sec, time_sec)(std::uint32_t, time_nsec, time_nsec)
+#else
+  #define TIMESTAMP_SEC_NSEC_PCL_STR
+#endif
 struct PointXYZIT {
   PCL_ADD_POINT4D   
-#ifdef ENABLE_TIMESTAMP
-  double timestamp;
+#ifdef ENABLE_INTENSITY
+  float intensity;
 #endif
 #ifdef ENABLE_RING
   uint16_t ring;                   
 #endif
-#ifdef ENABLE_INTENSITY
-  uint8_t intensity;
+#ifdef ENABLE_TIMESTAMP
+  uint32_t time_sec;
+  uint32_t time_nsec;
 #endif
 #ifdef ENABLE_CONFIDENCE
   uint8_t confidence;
@@ -85,17 +90,39 @@ struct PointXYZIT {
 POINT_CLOUD_REGISTER_POINT_STRUCT(
     PointXYZIT,
     (float, x, x)(float, y, y)(float, z, z)
-    TIMESTAMP_PCL_STR
-    RING_PCL_STR
     INTENSITY_PCL_STR
+    RING_PCL_STR
+    TIMESTAMP_SEC_NSEC_PCL_STR
     CONFIDENCE_PCL_STR
     WEIGHT_FACTOR_PCL_STR
     ENV_LIGHT_PCL_STR
 )
 
+struct ToolPointXYZIT {
+  PCL_ADD_POINT4D
+#ifdef ENABLE_TIMESTAMP
+  double timestamp;
+#endif
+#ifdef ENABLE_RING
+  uint16_t ring;
+#endif
+#ifdef ENABLE_INTENSITY
+  uint8_t intensity;
+#endif
+#ifdef ENABLE_CONFIDENCE
+  uint8_t confidence;
+#endif
+#ifdef ENABLE_WEIGHT_FACTOR
+  uint8_t weightFactor;
+#endif
+#ifdef ENABLE_ENV_LIGHT
+  uint8_t envLight;
+#endif
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
 
 #ifndef SPEC_LIDAR
-using ToolPointType = PointXYZIT;
+using ToolPointType = ToolPointXYZIT;
 using PclPointType = PointXYZIT;
 #endif
 
@@ -107,18 +134,44 @@ uint32_t cur_frame_time;
 
 namespace {
 using PclOpts = hesai::lidar::sample_config::PclToolRuntimeOptions;
+using CliOverrides = hesai::lidar::sample_config::PclToolCliOverrides;
 PclOpts g_pcl_opts;
 std::string g_output_dir;
 }  // namespace
 
-
 #ifndef SPEC_LIDAR
-static bool IsValidPointXyzit(const PointXYZIT& pt) {
+static bool IsValidPointXyzit(const ToolPointType& pt) {
   return (pt.x != 0.0f || pt.y != 0.0f || pt.z != 0.0f);
 }
 
+static inline PointXYZIT ToPclPointXyzit(const ToolPointType& src) {
+  PointXYZIT dst;
+  dst.x = src.x;
+  dst.y = src.y;
+  dst.z = src.z;
+#ifdef ENABLE_INTENSITY
+  dst.intensity = static_cast<float>(src.intensity);
+#endif
+#ifdef ENABLE_RING
+  dst.ring = src.ring;
+#endif
+#ifdef ENABLE_TIMESTAMP
+  hesai::lidar::sample_config::SplitFrameTimestampSecNsec(src.timestamp, &dst.time_sec, &dst.time_nsec);
+#endif
+#ifdef ENABLE_CONFIDENCE
+  dst.confidence = src.confidence;
+#endif
+#ifdef ENABLE_WEIGHT_FACTOR
+  dst.weightFactor = src.weightFactor;
+#endif
+#ifdef ENABLE_ENV_LIGHT
+  dst.envLight = src.envLight;
+#endif
+  return dst;
+}
+
 //log info, display frame message
-void lidarCallback(const LidarDecodedFrame<PointXYZIT>  &frame) {  
+void lidarCallback(const LidarDecodedFrame<ToolPointType>  &frame) {
   cur_frame_time = GetMicroTickCount();
   if (cur_frame_time - last_frame_time > kMaxTimeInterval) {
     printf("Time between last frame and cur frame is: %u us\n", (cur_frame_time - last_frame_time));
@@ -133,34 +186,37 @@ void lidarCallback(const LidarDecodedFrame<PointXYZIT>  &frame) {
     pcl_pointcloud->reserve(frame.points_num);
     for (uint32_t i = 0; i < frame.points_num; ++i) {
       if (IsValidPointXyzit(frame.points[i])) {
-        pcl_pointcloud->push_back(frame.points[i]);
+        pcl_pointcloud->push_back(ToPclPointXyzit(frame.points[i]));
       }
     }
   } else {
     pcl_pointcloud->resize(frame.points_num);
-    pcl_pointcloud->points.assign(frame.points, frame.points + frame.points_num);
+    for (uint32_t i = 0; i < frame.points_num; ++i) {
+      pcl_pointcloud->points[i] = ToPclPointXyzit(frame.points[i]);
+    }
   }
   pcl_pointcloud->height = 1;
   pcl_pointcloud->width = static_cast<uint32_t>(pcl_pointcloud->size());
   pcl_pointcloud->is_dense = g_pcl_opts.save_valid_points_only;
 
-  std::string file_name1 = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".pcd";
-  std::string file_name2 = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ "_bin.pcd";
-  std::string file_name3 = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ ".ply";
-  std::string file_name4 = g_output_dir + "/PointCloudFrame" + std::to_string(frame.frame_index) + "_" + std::to_string(frame.frame_start_timestamp)+ "_bin_compress" + ".pcd";
+  const std::string timestamp = hesai::lidar::sample_config::FormatFrameTimestampSecNsec(frame.frame_start_timestamp);
+  const std::string file_name_pcd_ascii = g_output_dir + "/" + timestamp + ".pcd";
+  const std::string file_name_pcd_binary = g_output_dir + "/" + timestamp + ".pcd";
+  const std::string file_name_ply = g_output_dir + "/" + timestamp + ".ply";
+  const std::string file_name_pcd_compressed = g_output_dir + "/" + timestamp + ".pcd";
   if (g_pcl_opts.save_pcd_ascii) {
     pcl::PCDWriter writer;
-    writer.writeASCII(file_name1, *pcl_pointcloud, g_pcl_opts.pcd_ascii_precision);
+    writer.writeASCII(file_name_pcd_ascii, *pcl_pointcloud, g_pcl_opts.pcd_ascii_precision);
   }
   if (g_pcl_opts.save_pcd_binary) {
-    pcl::io::savePCDFileBinary(file_name2, *pcl_pointcloud);
+    pcl::io::savePCDFileBinary(file_name_pcd_binary, *pcl_pointcloud);
   }
   if (g_pcl_opts.save_pcd_binary_compressed) {
-    pcl::io::savePCDFileBinaryCompressed(file_name4, *pcl_pointcloud);
+    pcl::io::savePCDFileBinaryCompressed(file_name_pcd_compressed, *pcl_pointcloud);
   }
   if (g_pcl_opts.save_ply) {
     pcl::PLYWriter writer1;
-    writer1.write(file_name3, *pcl_pointcloud, true);
+    writer1.write(file_name_ply, *pcl_pointcloud, true);
   }
   if (g_pcl_opts.enable_viewer) {
     PointCloudColorHandlerGenericField<PointXYZIT> point_color_handle(pcl_pointcloud, "intensity");
@@ -181,12 +237,7 @@ void PclViewerInitXyzit(std::shared_ptr<PCLVisualizer>& pcl_viewer) {
 
 
 static void PrintUsage(const char* prog) {
-  fprintf(stderr, "Usage: %s <config.ini> [use_gpu]\n", prog);
-  fprintf(stderr, "  config.ini  - INI configuration file (required)\n");
-  fprintf(stderr, "  use_gpu     - 1 to enable GPU acceleration (optional)\n");
-  fprintf(stderr, "\nExample:\n");
-  fprintf(stderr, "  %s tool_sample_config.ini\n", prog);
-  fprintf(stderr, "  %s tool_sample_config.ini 1\n", prog);
+  hesai::lidar::sample_config::PrintPclToolUsage(prog);
 }
 
 int main(int argc, char *argv[])
@@ -208,6 +259,13 @@ int main(int argc, char *argv[])
   probe.close();
 
   std::string err;
+  CliOverrides cli_overrides;
+  if (!hesai::lidar::sample_config::ParsePclToolCliOverrides(argc, argv, &cli_overrides, &err)) {
+    fprintf(stderr, "[pcl_tool] argument error: %s\n", err.c_str());
+    PrintUsage(argv[0]);
+    return 1;
+  }
+
   std::unordered_map<std::string, std::string> kv;
   if (!hesai::lidar::sample_config::LoadIniMap(argv[1], &kv, &err)) {
     fprintf(stderr, "[pcl_tool] config error: %s\n", err.c_str());
@@ -225,8 +283,20 @@ int main(int argc, char *argv[])
     fprintf(stderr, "[pcl_tool] pcl section error: %s\n", err.c_str());
     return 1;
   }
-  if (argc >= 3 && std::string(argv[2]) == "1") {
+  if (cli_overrides.use_gpu) {
     param.use_gpu = true;
+  }
+  if (!cli_overrides.pcap_path.empty()) {
+    param.input_param.pcap_path = cli_overrides.pcap_path;
+  }
+  if (!cli_overrides.correction_file_path.empty()) {
+    param.input_param.correction_file_path = cli_overrides.correction_file_path;
+  }
+  if (!cli_overrides.firetimes_path.empty()) {
+    param.input_param.firetimes_path = cli_overrides.firetimes_path;
+  }
+  if (!cli_overrides.output_dir.empty()) {
+    g_pcl_opts.output_dir = cli_overrides.output_dir;
   }
   printf("[pcl_tool] loaded config: %s\n", argv[1]);
 
